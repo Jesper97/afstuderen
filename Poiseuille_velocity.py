@@ -8,8 +8,8 @@ np.set_printoptions(threshold=sys.maxsize)
 
 # Define constants
 # Grid and time steps
-N_x = 81        # lattice nodes in the x-direction
-N_y = 21        # lattice nodes in the x-direction
+N_x = 40        # lattice nodes in the x-direction
+N_y = 20        # lattice nodes in the x-direction
 N_t = 1000       # time steps
 
 # Simulation parameters
@@ -20,25 +20,30 @@ dt = 1          # simulation time
 c_s = (1 / np.sqrt(3)) * (dx / dt)  # speed of sound
 q = 9                               # number of directions
 
-# Material simulation constants
-tau = 0.9
+tau = 0.7
+nu = c_s**2 * (tau - dt / 2)
 
 # D2Q9 lattice constants
 c_i = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]], dtype=np.int)
 c_opp = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], dtype=np.int)
 w_i = np.array([4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36])
 
-# Physical constants
-L = 0.2     # length of pipe
-H = 0.2     # height of pipe
-T = 20
-nu = c_s**2 * (tau - dt / 2)
 F = 0.001 * w_i * np.array([0, 1, 0, -1, 0, 1, -1, -1, 1])
 
+# Physical constants
+L = 0.2     # length of pipe
+H = 0.1     # height of pipe
+T = 2       # Time
+nu_p = 1e-6 # Kinematic viscosity
+
+dx_p = H / N_y
+dt_p = c_s**2 * (tau - 1 / 2) * dx_p**2 / nu_p
+
 # Conversion factors
-Cx = H / N_x
-Cy = L / N_y
+Cy = dx_p
 Ct = T / N_t
+Cu = dx_p / dt_p
+print(Cu)
 
 # Initial conditions
 u_x = np.zeros((N_x, N_y))
@@ -131,9 +136,10 @@ for t in range(N_t):
 
         ## Line plot
         plt.figure(0)
-        plt.plot(u_x[np.int(np.rint(N_x/2)), :], r_phys)
+        plt.plot(Cu*u_x[np.int(np.rint(N_x/2)), :], r_phys)
         # plt.plot(u_x[1, :], r_phys)
-        plt.plot(u_th, r_phys, 'o')
+        plt.plot(Cu*u_th, r_phys, 'o')
+        plt.legend
         plt.savefig("Figures/Pois_test/lineplot" + str(t / 100) + ".png")
 
         ## Vector plot

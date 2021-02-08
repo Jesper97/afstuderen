@@ -9,63 +9,80 @@ np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 
 # Define constants
+# Physical parameters
+L = 0.01            # m
+H = 0.01            # m
+g = 9.81            # m/s^2
+T = 1               # s
+nu = 10e-6          # m^2/s
+rho = 1e3           # kg/m^3
+dp = 0.1            # kg/(m s^2)
+# dx = H / N_y      # m
+Fp = dp / L         # Pressure force density (kg/(m^2 s^2))
+umax = 0.1
+
 # Dimensionless numbers
-Re = 25
+Re = umax * H / nu
+Pr = 7
+Ra = 10e6
+Ma = 0.1
 
-# Simulation parameters
-dx = 1          # simulation length
-dt = 1          # simulation time
-u_max = 0.2     #
-
-c_s = (1 / np.sqrt(3)) * (dx / dt)  # speed of sound
-q = 9                               # number of directions
+# Chose simulation parameters to determine the dependent one
 tau = 0.9
-alpha = 0.1
+w = 100
 
-nu = c_s**2 * (tau - dt / 2)
+dx_sim = 1      # simulation length
+dt_sim = 1      # simulation time
+c_s = (1 / np.sqrt(3)) * (dx_sim / dt_sim)  # speed of sound
+nu_sim = c_s**2 * (tau - 1/2)
 
-# Grid and time steps
-N_y = np.int(np.rint(Re * nu / u_max))  # lattice nodes in the y-direction
-N_x = 40                               # lattice nodes in the x-direction
-N_t = 1000       # time steps
+def check_stability(umax_sim, tau):
+    if umax_sim > 0.1:
+        print('Simulation velocity is', umax_sim, 'and might give unstable simulations.')
+    if tau < 1/2:
+        print('Relaxation time is', tau, 'and might give unstable simulations.')
+
+# Determine dependent parameter
+umax_sim = Re * nu_sim / w
+check_stability(umax_sim, tau)
+
+# Calculate conversion parameters
+dx = H / w
+dt = c_s**2 * (tau - 1/2) * dx**2 / nu
+Cu = dx / dt
+Cg = dx / dt**2
 
 # D2Q9 lattice constants
 c_i = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]], dtype=np.int)
 c_opp = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], dtype=np.int)
 w_i = np.array([4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36])
+q = 9                               # number of directions
 
-# Physical constants
-L = 0.2         # length of pipe
-H = 0.2         # height of pipe
-g_p = 9.81      # gravity
-F_pressure = 0.02 * w_i * np.array([0, 1, 0, -1, 0, 1, -1, -1, 1])
+# Simulation parameters
+alpha_sim = Pr / nu_sim
 
-nu_p = 1e-6     # Kinematic viscosity
+# Grid and time steps
+l = w                               # lattice nodes in the x-direction
+Nt = T / dt       # time steps
 
-dx_p = H / N_y
-dt_p = c_s**2 * (tau - 1 / 2) * dx_p**2 / nu_p
-
-# Conversion factors
-Cy = dx_p
-Cu = dx_p / dt_p
-Cg = dx_p / dt_p**2
 # Forces
-g = Cg * g_p * w_i * np.array([0, 0, -1, 0, 1, -1, -1, 1, 1]) * 0
+Fp_sim = (Fp * w_i / c_s**2) * np.array([0, 1, 0, -1, 0, 1, -1, -1, 1])
+g_sim = g / Cg
+gi_sim = (g_sim * w_i / c_s**2) * np.array([0, 0, -1, 0, 1, -1, -1, 1, 1])
 
 # Initial conditions
-ux = np.zeros((N_x, N_y))       # Simulation velocity in x direction
-uy = np.zeros((N_x, N_y))       # Simulation velocity in y direction
-rho = np.ones((N_x, N_y))       # Simulation density
-T_dim = np.zeros((N_x, N_y))    # Dimensionless simulation temperature
+ux = np.zeros((l, N_y))       # Simulation velocity in x direction
+uy = np.zeros((l, N_y))       # Simulation velocity in y direction
+rho_sim = rho0_sim * np.ones((l, N_y))   # Simulation density
+T_dim = np.zeros((l, N_y))    # Dimensionless simulation temperature
 
 # Temperature BCS
 beta_p = 210e-6
 T0 = 293
 T_up_p = 289
 T_down_p = 297
-T_BC_upper = np.ones(N_x) * beta_p * (T_up_p - T0)
-T_BC_lower = np.ones(N_x) * beta_p * (T_down_p - T0)
-
+T_BC_upper = np.ones(l) * beta_p * (T_up_p - T0)
+T_BC_lower = np.ones(l) * beta_p * (T_down_p - T0)
 
 for node in range(len(T_BC_upper)):
     if node <= len(T_BC_upper)/2:
@@ -84,8 +101,8 @@ def pipe_boundary(N_x, N_y):
 
 @jit
 def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
-    f_eq = np.zeros((N_x, N_y, q))
-    u_dot_c = np.zeros((N_x, N_y, q))
+    f_eq = np.zeros((l, N_y, q))
+    u_dot_c = np.zeros((l, N_y, q))
 
     u_dot_u = ux**2 + uy**2
     for i in range(q):
@@ -97,14 +114,14 @@ def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
 
 
 def temperature(T_dim, alpha, dx, ux, uy, T_BC_lower, T_BC_upper):
-    T_dim_new = np.zeros((N_x, N_y))
+    T_dim_new = np.zeros((l, N_y))
     T_dim_new[:, 0] = T_BC_lower
     T_dim_new[:, -1] = T_BC_upper
 
     a = alpha / dx**2
 
     for j in range(1, N_y-1):
-        for i in range(1, N_x-1):
+        for i in range(1, l - 1):
             T_dim_new[i, j] = (a - ux[i, j] / (2 * dx)) * T_dim[i-1, j] + (1 - 4 * a) * T_dim[i, j] \
                             + (a - ux[i, j] / (2 * dx)) * T_dim[i+1, j] + (a - uy[i, j] / (2 * dx)) * T_dim[i, j-1] \
                             + (a - uy[i, j] / (2 * dx)) * T_dim[i, j+1]
@@ -121,20 +138,20 @@ T_dim[:, 0] = T_BC_lower
 T_dim[:, -1] = T_BC_upper
 
 # Initialize boundary
-bounds = pipe_boundary(N_x, N_y)
+bounds = pipe_boundary(l, N_y)
 
 # Initialize equilibrium function
 f_eq = f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s)
 f_i = np.copy(f_eq)
 
-for t in range(N_t):
+for t in range(Nt):
     # Calculate macroscopic quantities
     rho = np.sum(f_i, axis=2)
     ux = (np.sum(f_i[:, :, [1, 5, 8]], axis=2) - np.sum(f_i[:, :, [3, 6, 7]], axis=2)) / rho
     uy = (np.sum(f_i[:, :, [2, 5, 6]], axis=2) - np.sum(f_i[:, :, [4, 7, 8]], axis=2)) / rho
 
     # Calculate new T
-    T_dim = temperature(T_dim, alpha, dx, ux, uy, T_BC_lower, T_BC_upper)
+    T_dim = temperature(T_dim, alpha_sim, dx_sim, ux, uy, T_BC_lower, T_BC_upper)
 
     # Buoyancy force
     F_buoy = T_dim[:, :, None] * g
@@ -149,7 +166,7 @@ for t in range(N_t):
     f_eq = f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s)
 
     ### Collision step
-    f_star = f_i * (1 - dt / tau) + f_eq * dt / tau + dt * F_pressure + dt * F_buoy
+    f_star = f_i * (1 - dt_sim / tau) + f_eq * dt_sim / tau + dt_sim * F_pressure + dt_sim * F_buoy
 
     # Periodic boundary conditions
     f_star[0, :, 1] = f_star[-2, :, 1]
@@ -162,7 +179,7 @@ for t in range(N_t):
 
     ### Streaming step
     for j in range(1, N_y-1):
-        for i in range(1, N_x-1):
+        for i in range(1, l - 1):
             f_i[i, j, 0] = f_star[i, j, 0]
             f_i[i, j, 1] = f_star[i-1, j, 1]
             f_i[i, j, 2] = f_star[i, j-1, 2]
@@ -189,17 +206,18 @@ for t in range(N_t):
         r[-1] = r[-1] + (r[-2] - r[-1]) / 2
         r_phys = r*Cy
         R = r_phys[-1]
-        u_max = np.amax(ux[np.int(np.rint(N_x / 2)), 1:N_y])
-        u_th = u_max * (1 - r_phys**2 / R**2)
+        umax_sim = np.amax(ux[np.int(np.rint(l / 2)), 1:N_y])
+        u_th = umax_sim * (1 - r_phys ** 2 / R ** 2)
 
         ## Line plot
         plt.figure(np.int(t/200))
-        plt.plot(ux[np.int(np.rint(N_x / 2)), :], r_phys)
+        plt.plot(ux[np.int(np.rint(l / 2)), :], r_phys)
         plt.plot(u_th, r_phys, 'o')
         plt.title('Velocity profile of simple Poiseuille flow.')
         plt.xlabel('$u$ (m/s)')
         plt.ylabel('$r$ (m)')
-        plt.savefig("Figures/Pois_temp/lineplot_temp" + str(t) + ".png")
+        plt.show()
+        # plt.savefig("Figures/Pois_temp/lineplot_temp" + str(t) + ".png")
 
         # ## Vector plot
         # plt.figure(np.int(t/200))

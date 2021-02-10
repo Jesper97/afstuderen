@@ -1,7 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from matplotlib import cm
 from numba import jit
+pd.set_option("display.max_rows", None, "display.max_columns", None)
 
 # Flow constants
 maxIter = 1000        # amount of cycles
@@ -73,6 +75,7 @@ def poiseuille_flow_channel(max_x, max_y, u_max):
 
 # Initialize the boundary once. The boundary depends on the box's dimensions and the object being placed
 boundary = set_boundary(lx, ly, obstacle_x, obstacle_y, obstacle_r, cylinder)
+print(boundary)
 
 # Initialize the poiseulle flow velocity profile once to reference later
 p_flow_channel_x, p_flow_channel_y = poiseuille_flow_channel(lx, ly, U)

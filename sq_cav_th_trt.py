@@ -21,8 +21,8 @@ alpha = 1.44e-7     # m^2/s
 rho0 = 1e3          # kg/m^3
 beta = 210e-6       # 1/K
 T0 = 293            # K
-T_C = 292.99           # K
-T_H = 293.01           # K
+T_C = 280           # K
+T_H = 306           # K
 umax = np.sqrt(g * beta * (T_H - T0) * L)
 
 # Dimensionless numbers
@@ -33,9 +33,9 @@ Ma = 0.1
 
 # Choose simulation parameters
 Lambda = 1/4
-tau_plus = 0.7
+tau_plus = 0.65
 rho0_sim = 1
-Ny = 10
+Ny = 40
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -72,8 +72,8 @@ Nx = Ny                     # lattice nodes in the x-direction
 Nt = np.int(T / dt)         # time steps
 
 # Forces
-g_sim = g / Cg
-gi_sim = (g_sim * w_i / c_s**2) * np.array([0, 0, -1, 0, 1, -1, -1, 1, 1])
+g_sim = g / Cg * np.array([0, -1])
+# gi_sim = (g_sim * w_i / c_s**2) * np.array([0, 0, -1, 0, 1, -1, -1, 1, 1])
 
 # Initial conditions
 ux = np.zeros((Nx, Ny))       # Simulation velocity in x direction
@@ -85,11 +85,12 @@ T_dim = np.zeros((Nx, Ny))    # Dimensionless simulation temperature
 T_BC_H = np.ones(Ny) * beta * (T_H - T0)
 T_BC_C = np.ones(Ny) * beta * (T_C - T0)
 
-def easy_view(arr):
+def easy_view(nr, arr):
     idx = ["idx" for i in arr[1, :]]
     col = ["col" for j in arr[:, 1]]
+
     dataset = pd.DataFrame(arr.T, index=idx, columns=col)
-    print(dataset)
+    print(nr, dataset)
 
 @jit
 def fluid(Nx, Ny, f_i, f_star):
@@ -252,17 +253,23 @@ def streaming(Nx, Ny, f_i, f_star):
     return f_i
 
 @jit
-def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
+def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s, F):
     f_eq = np.zeros((Nx, Ny, q))
     f_eq_plus = np.zeros((Nx, Ny, q))
     f_eq_minus = np.zeros((Nx, Ny, q))
     u_dot_c = np.zeros((Nx, Ny, q))
+    Fi = np.zeros((Nx, Ny, q))
+    Si = np.zeros((Nx, Ny, q))
 
     u_dot_u = ux**2 + uy**2
+    u_dot_F = ux * F[:, :, 0] + uy * F[:, :, 1]
+
     for i in range(q):
         u_dot_c[:, :, i] = ux * c_i[i, 0] + uy * c_i[i, 1]
-        inner = 1 + (u_dot_c[:, :, i] / c_s**2) + (u_dot_c[:, :, i]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2))
-        f_eq[:, :, i] = w_i[i] * rho * inner
+        f_eq[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :, i] / c_s**2) + (u_dot_c[:, :, i]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
+
+        Fi[:, :, i] = F[:, :, 0] * c_i[i, 0] + F[:, :, 1] * c_i[i, 1]
+        Si[:, :, i] = (tau_plus - 1/2) * w_i[i] * (u_dot_c[:, :, i] * Fi[:, :, i] / c_s**2 - u_dot_F) + (tau_minus - 1/2) * w_i[i] * Fi[:, :, i]
 
     f_eq_plus[:, :, 0] = f_eq[:, :, 0]
     f_eq_plus[:, :, 1] = (f_eq[:, :, 1] + f_eq[:, :, 3]) / 2
@@ -284,7 +291,7 @@ def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
     f_eq_minus[:, :, 7] = -f_eq_minus[:, :, 5]
     f_eq_minus[:, :, 8] = -f_eq_minus[:, :, 6]
 
-    return f_eq_plus, f_eq_minus
+    return f_eq_plus, f_eq_minus, Si
 
 @jit
 def decompose_f_i(f_i):
@@ -317,32 +324,31 @@ def decompose_f_i(f_i):
 def temperature(T, alpha, ux, uy, T_BC_lower, T_BC_upper):
     T_new = np.zeros((Nx, Ny))
 
-    a = alpha
-    dx = 1
-
     for j in range(1, Ny-1):
         for i in range(1, Nx-1):
-            T_new[i, j] = T[i, j] - ux[i, j] * (T[i+1, j] - T[i-1, j] - 1/4 * (T[i+1, j+1] - T[i-1, j+1] + T[i+1, j-1] - T[i-1, j-1])) - \
-                uy[i, j] * (T[i, j+1] - T[i, j-1] - 1/4 * (T[i+1, j+1] - T[i+1, j-1] + T[i-1, j+1] - T[i-1, j-1])) + \
-                alpha * (2 * (T[i+1, j] + T[i-1, j] + T[i, j+1] + T[i, j-1]) - 1/2 * (T[i+1, j+1] + T[i-1, j+1] + T[i-1, j-1] + T[i+1, j-1])) - \
-                6 * T[i, j]
+            T_new[i, j] = (1 - 6 * alpha) * T[i, j] + (2 * alpha - ux[i, j]) * T[i+1, j] \
+                          + (2 * alpha + ux[i, j]) * T[i-1, j] + (2 * alpha - uy[i, j]) * T[i, j+1] \
+                          + (2 * alpha + uy[i, j]) * T[i, j-1] + (ux[i, j] / 4 + uy[i, j] / 4 - alpha / 2) * T[i+1, j+1] \
+                          + (-ux[i, j] / 4 + uy[i, j] / 4 - alpha / 2) * T[i-1, j+1] + (ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i+1, j-1] \
+                          + (-ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i-1, j-1]
 
-            # T_new[i, j] = (a - ux[i, j] / (2 * dx)) * T[i-1, j] + (1 - 4 * a) * T[i, j] \
-            #                 + (a - ux[i, j] / (2 * dx)) * T[i+1, j] + (a - uy[i, j] / (2 * dx)) * T[i, j-1] \
-            #                 + (a - uy[i, j] / (2 * dx)) * T[i, j+1]
-        #     T_new[i, j] = -5 * T[i, j] + (2 * alpha - ux[i, j]) * T[i+1, j] \
-        #                   + (2 * alpha + ux[i, j]) * T[i-1, j] + (2 * alpha - uy[i, j]) * T[i, j+1] \
-        #                   + (2 * alpha + uy[i, j]) * T[i, j-1] + (ux[i, j] / 4 + uy[i, j] / 4 - alpha / 2) * T[i+1, j+1] \
-        #                   + (-ux[i, j] / 4 + uy[i, j] / 4 - alpha / 2) * T[i-1, j+1] + (ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i+1, j-1] \
-        #                   + (-ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i-1, j-1]
+    # easy_view(1, T_new)
+    # T BCs
+    # T_new[0, :] = 8/3 * T_BC_lower - 2 * T_new[1, :] + 1/3 * T_new[2, :]
+    # T_new[-1, :] = 8/3 * T_BC_upper - 2 * T_new[-2, :] + 1/3 * T_new[-3, :]
 
-    # Constant T BCs
-    T_new[0, :] = 8/3 * T_BC_upper - 2 * T_new[1, :] + 1/3 * T_new[2, :]
-    T_new[-1, :] = 8/3 * T_BC_lower - 2 * T_new[-2, :] + 1/3 * T_new[-3, :]
+    T_new[0, 1:Ny-1] = 8/3 * T_BC_lower[1:Ny-1] - 2 * T_new[1, 1:Ny-1] + 1/3 * T_new[2, 1:Ny-1]
+    T_new[-1, 1:Ny-1] = 8/3 * T_BC_upper[1:Ny-1] - 2 * T_new[-2, 1:Ny-1] + 1/3 * T_new[-3, 1:Ny-1]
+
+    # easy_view(2, T_new)
 
     # Adiabatic BCs
-    T_new[1:Nx-1, 0] = 21/23 * T_new[1:Nx-1, 1] + 3/23 * T_new[1:Nx-1, 2] - 1/23 * T_new[1:Nx-1, 3]
-    T_new[1:Nx-1, -1] = 21/23 * T_new[1:Nx-1, -1] + 3/23 * T_new[1:Nx-1, -2] - 1/23 * T_new[1:Nx-1, -3]
+    # T_new[1:Nx-1, 0] = 21/23 * T_new[1:Nx-1, 1] + 3/23 * T_new[1:Nx-1, 2] - 1/23 * T_new[1:Nx-1, 3]
+    # T_new[1:Nx-1, -1] = 21/23 * T_new[1:Nx-1, -1] + 3/23 * T_new[1:Nx-1, -2] - 1/23 * T_new[1:Nx-1, -3]
+    T_new[:, 0] = 21/23 * T_new[:, 1] + 3/23 * T_new[:, 2] - 1/23 * T_new[:, 3]
+    T_new[:, -1] = 21/23 * T_new[:, -2] + 3/23 * T_new[:, -3] - 1/23 * T_new[:, -4]
+
+    # easy_view(3, T_new)
 
     return T_new
 
@@ -350,9 +356,10 @@ def temperature(T, alpha, ux, uy, T_BC_lower, T_BC_upper):
 # Temperature BCs
 T_dim[0, :] = T_BC_C
 T_dim[-1, :] = T_BC_H
+F_buoy = - T_dim[:, :, None] * g_sim                                            # New buoyancy force
 
 # Initialize equilibrium function
-f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)
+f_plus, f_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
 f_i = f_plus + f_minus
 
 start = time.time()
@@ -360,37 +367,39 @@ start = time.time()
 for t in range(Nt):
     # Calculate macroscopic quantities
     #### IN TERMEN VAN EVEN FUNCTIES
-    rho = np.sum(f_i, axis=2)
-    ux = (np.sum(f_i[:, :, [1, 5, 8]], axis=2) - np.sum(f_i[:, :, [3, 6, 7]], axis=2)) / rho
-    uy = (np.sum(f_i[:, :, [2, 5, 6]], axis=2) - np.sum(f_i[:, :, [4, 7, 8]], axis=2)) / rho
+    rho = np.sum(f_plus, axis=2)
+    ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2)     #(np.sum(f_i[:, :, [1, 5, 8]], axis=2) - np.sum(f_i[:, :, [3, 6, 7]], axis=2)) / rho + F_buoy[:, :, 0] / 2
+    uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2)     #(np.sum(f_i[:, :, [2, 5, 6]], axis=2) - np.sum(f_i[:, :, [4, 7, 8]], axis=2)) / rho + F_buoy[:, :, 1] / 24
 
+    # print(1, T_dim)
     T_dim = temperature(T_dim, alpha_sim, ux, uy, T_BC_C, T_BC_H)   # New T
+    # print(2, T_dim)
 
-    Fi_buoy = T_dim[:, :, None] * gi_sim                                            # New buoyancy force
+    F_buoy = - T_dim[:, :, None] * g_sim                                            # New buoyancy force
 
-    f_eq_plus, f_eq_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)        # New equilibrium distribution
+    f_eq_plus, f_eq_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)        # New equilibrium distribution
 
-    # Collision
-    f_star = f_i - (f_plus - f_eq_plus) / tau_plus - (f_minus - f_eq_minus) / tau_minus + Fi_buoy
+    # Collision step
+    f_star = f_i - (f_plus - f_eq_plus) / tau_plus - (f_minus - f_eq_minus) / tau_minus + Si
 
-    # Streaming
+    # Streaming step
     f_i = streaming(Nx, Ny, f_i, f_star)
     f_plus, f_minus = decompose_f_i(f_i)
 
-    ## Vector plot
-    if t in [0, 5, 10, 15, 20]:
-        plt.figure(t)
-        plt.clf()
-        plt.imshow(np.flip(T_dim, axis=1).T, cmap=cm.Blues)
-        plt.colorbar()
-        plt.savefig("Figures/sq_cav_th/heatmap_T" + str(t) + ".png")
-        plt.figure(np.int(t/200)+2, dpi=300)
-        plt.quiver(ux.T, uy.T)
-        plt.xlabel('$x$ (# lattice nodes)')
-        plt.ylabel('$y$ (# lattice nodes)')
-        plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
-        # plt.legend('Velocity vector')
-        plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(t) + ".png")
+    # ## Vector plot
+    # if t in [0, 5, 10, 15, 20]:
+    #     plt.figure(t)
+    #     plt.clf()
+    #     plt.imshow(np.flip(T_dim, axis=1).T, cmap=cm.Blues)
+    #     plt.colorbar()
+    #     plt.savefig("Figures/sq_cav_th/heatmap_T" + str(t) + ".png")
+    #     plt.figure(np.int(t/200)+2, dpi=300)
+    #     plt.quiver(ux.T, uy.T)
+    #     plt.xlabel('$x$ (# lattice nodes)')
+    #     plt.ylabel('$y$ (# lattice nodes)')
+    #     plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
+    #     # plt.legend('Velocity vector')
+    #     plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(t) + ".png")
 
 stop = time.time()
 print(stop-start)
@@ -424,24 +433,24 @@ y = np.linspace(0, H, len(uy))
 # plt.ylabel('$y$ (# lattice nodes)')
 # plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
 # # plt.legend('Velocity vector')
-# plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(3) + ".png")
-#
-# ## Heatmaps
-# plt.figure(2)
-# plt.clf()
-# plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
-# plt.colorbar()
-# plt.savefig("Figures/sq_cav_th/heatmapx_temp" + str(3.1) + ".png")
-# #
-# plt.figure(3)
-# plt.clf()
-# plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
-# plt.colorbar()
-# plt.savefig("Figures/Pois_temp/heatmap_uy_temp" + str(t) + ".png")
-#
+# plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(4) + ".png")
+
+## Heatmaps
+plt.figure(2)
+plt.clf()
+plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
+plt.colorbar()
+plt.savefig("Figures/sq_cav_th/heatmapx_temp" + str(5.1) + ".png")
+
+plt.figure(3)
+plt.clf()
+plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
+plt.colorbar()
+plt.savefig("Figures/sq_cav_th/heatmap_uy_temp" + str(5.2) + ".png")
+
 ## Temperature heatmap
 plt.figure(4)
 plt.clf()
-plt.imshow(np.flip(T_dim, axis=1).T, cmap=cm.Blues)
+plt.imshow(np.flip(T_dim.T, axis=0), cmap=cm.Blues)
 plt.colorbar()
-plt.savefig("Figures/sq_cav_th/heatmap_T" + str(3.2) + ".png")
+plt.savefig("Figures/sq_cav_th/heatmap_T" + str(5.3) + ".png")

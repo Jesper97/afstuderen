@@ -15,14 +15,14 @@ pd.set_option("display.max_rows", None, "display.max_columns", None)
 L = 0.01            # m
 H = 0.01            # m
 g = 9.81            # m/s^2
-T = 2               # s
+Time = 10           # s
 nu = 1e-6           # m^2/s
 alpha = 1.44e-7     # m^2/s
 rho0 = 1e3          # kg/m^3
 beta = 210e-6       # 1/K
 T0 = 293            # K
-T_C = 280           # K
-T_H = 306           # K
+T_C = 288           # K
+T_H = 298           # K
 umax = np.sqrt(g * beta * (T_H - T0) * L)
 
 # Dimensionless numbers
@@ -53,6 +53,7 @@ dx = H / Ny
 dt = c_s ** 2 * (tau_plus - 1 / 2) * dx ** 2 / nu
 print('dt', dt)
 Cu = dx / dt
+print('Cu', Cu)
 Cg = dx / dt**2
 Crho = rho0 / rho0_sim
 CF = Crho * Cg
@@ -69,7 +70,7 @@ alpha_sim = nu_sim / Pr
 
 # Grid and time steps
 Nx = Ny                     # lattice nodes in the x-direction
-Nt = np.int(T / dt)         # time steps
+Nt = np.int(Time / dt)         # time steps
 
 # Forces
 g_sim = g / Cg * np.array([0, -1])
@@ -334,19 +335,17 @@ def temperature(T, alpha, ux, uy, T_BC_lower, T_BC_upper):
 
     # easy_view(1, T_new)
     # T BCs
-    # T_new[0, :] = 8/3 * T_BC_lower - 2 * T_new[1, :] + 1/3 * T_new[2, :]
-    # T_new[-1, :] = 8/3 * T_BC_upper - 2 * T_new[-2, :] + 1/3 * T_new[-3, :]
-
-    T_new[0, 1:Ny-1] = 8/3 * T_BC_lower[1:Ny-1] - 2 * T_new[1, 1:Ny-1] + 1/3 * T_new[2, 1:Ny-1]
-    T_new[-1, 1:Ny-1] = 8/3 * T_BC_upper[1:Ny-1] - 2 * T_new[-2, 1:Ny-1] + 1/3 * T_new[-3, 1:Ny-1]
+    T_new[0, 1:Ny-1] = 8/15 * T_BC_lower[1:Ny-1] + 2/3 * T_new[1, 1:Ny-1] - 1/5 * T_new[2, 1:Ny-1]
+    T_new[-1, 1:Ny-1] = 8/15 * T_BC_upper[1:Ny-1] + 2/3 * T_new[-2, 1:Ny-1] - 1/5 * T_new[-3, 1:Ny-1]
 
     # easy_view(2, T_new)
 
     # Adiabatic BCs
-    # T_new[1:Nx-1, 0] = 21/23 * T_new[1:Nx-1, 1] + 3/23 * T_new[1:Nx-1, 2] - 1/23 * T_new[1:Nx-1, 3]
-    # T_new[1:Nx-1, -1] = 21/23 * T_new[1:Nx-1, -1] + 3/23 * T_new[1:Nx-1, -2] - 1/23 * T_new[1:Nx-1, -3]
-    T_new[:, 0] = 21/23 * T_new[:, 1] + 3/23 * T_new[:, 2] - 1/23 * T_new[:, 3]
-    T_new[:, -1] = 21/23 * T_new[:, -2] + 3/23 * T_new[:, -3] - 1/23 * T_new[:, -4]
+    T_new[:, 0] = 3/2 * T_new[:, 1] - 1/2 * T_new[:, 2]
+    T_new[:, -1] = 3/2 * T_new[:, -2] - 1/2 * T_new[:, -3]
+
+    # T_new[:, 0] = 21/23 * T_new[:, 1] + 3/23 * T_new[:, 2] - 1/23 * T_new[:, 3]
+    # T_new[:, -1] = 21/23 * T_new[:, -2] + 3/23 * T_new[:, -3] - 1/23 * T_new[:, -4]
 
     # easy_view(3, T_new)
 
@@ -368,8 +367,8 @@ for t in range(Nt):
     # Calculate macroscopic quantities
     #### IN TERMEN VAN EVEN FUNCTIES
     rho = np.sum(f_plus, axis=2)
-    ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2)     #(np.sum(f_i[:, :, [1, 5, 8]], axis=2) - np.sum(f_i[:, :, [3, 6, 7]], axis=2)) / rho + F_buoy[:, :, 0] / 2
-    uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2)     #(np.sum(f_i[:, :, [2, 5, 6]], axis=2) - np.sum(f_i[:, :, [4, 7, 8]], axis=2)) / rho + F_buoy[:, :, 1] / 24
+    ux = 0 * np.sum(f_minus[:, :] * c_i[:, 0], axis=2)
+    uy = 0 * np.sum(f_minus[:, :] * c_i[:, 1], axis=2)
 
     # print(1, T_dim)
     T_dim = temperature(T_dim, alpha_sim, ux, uy, T_BC_C, T_BC_H)   # New T
@@ -414,10 +413,12 @@ R = r_phys[-1]
 umax_sim = np.amax(ux[np.int(np.rint(Nx / 2)), 1:Ny])
 u_th = umax_sim * (1 - r_phys ** 2 / R ** 2)
 
+T = T_dim / beta + T0
+
 ## Vector plot
 # plt.figure(np.int(t/200)+1)
-x = np.linspace(0, L, len(ux))
-y = np.linspace(0, H, len(uy))
+x = np.linspace(dx, L-dx, len(ux))
+y = np.linspace(dx, H-dx, len(uy))
 # fig = ff.create_streamline(x, y, ux.T, uy.T)
 # fig.show()
 # plt.xlabel('$x$ (# lattice nodes)')
@@ -426,31 +427,48 @@ y = np.linspace(0, H, len(uy))
 # plt.legend('Velocity vector')
 # plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(t-2) + ".png")
 
-# ## Vector plot
+## Vector plot
 # plt.figure(np.int(t/200)+2, dpi=300)
-# plt.quiver(ux.T, uy.T)
+# plt.quiver(Cu*ux.T, Cu*uy.T)
 # plt.xlabel('$x$ (# lattice nodes)')
 # plt.ylabel('$y$ (# lattice nodes)')
-# plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
+# plt.title('$u$ in pipe with left wall at $T=298K$ and right wall at $T=288K$')
 # # plt.legend('Velocity vector')
-# plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(4) + ".png")
-
-## Heatmaps
-plt.figure(2)
-plt.clf()
-plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
-plt.colorbar()
-plt.savefig("Figures/sq_cav_th/heatmapx_temp" + str(5.1) + ".png")
-
-plt.figure(3)
-plt.clf()
-plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
-plt.colorbar()
-plt.savefig("Figures/sq_cav_th/heatmap_uy_temp" + str(5.2) + ".png")
+# plt.savefig("Figures/sq_cav_th/arrowplot_" + str(1) + "_time10.png")
+#
+# # Heatmaps
+# plt.figure(2)
+# plt.clf()
+# plt.imshow(Cu*ux.T, cmap=cm.Blues, origin='lower')
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title('$u_x$ in pipe with left wall at $T=298K$ and right wall at $T=288K$')
+# plt.colorbar()
+# plt.savefig("Figures/sq_cav_th/heatmapx_" + str(2) + "_time10.png")
+#
+# plt.figure(3)
+# plt.clf()
+# plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title('$u_y$ in pipe with left wall at $T=298K$ and right wall at $T=288K$')
+# plt.colorbar()
+# plt.savefig("Figures/sq_cav_th/heatmap_uy_" + str(3) + "_time10.png")
 
 ## Temperature heatmap
 plt.figure(4)
 plt.clf()
-plt.imshow(np.flip(T_dim.T, axis=0), cmap=cm.Blues)
+plt.imshow(np.flip(T.T, axis=0), cmap=cm.Blues)
+plt.xlabel('$x$ (# lattice nodes)')
+plt.ylabel('$y$ (# lattice nodes)')
+plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. No flow.')
 plt.colorbar()
-plt.savefig("Figures/sq_cav_th/heatmap_T" + str(5.3) + ".png")
+plt.savefig(f"Figures/sq_cav_th/heatmap_T_adv_newBCs_time{Time}" + str() + ".png")
+
+## Temperature line plot
+plt.figure(0)
+plt.plot(x, T[:, 0])
+plt.xlabel('$x$ (m)')
+plt.ylabel('$T$ (K)')
+plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. 1D cross section.')
+plt.savefig(f"Figures/sq_cav_th/lineplot_T_adv_newBCs_time{Time}" + str() + ".png")

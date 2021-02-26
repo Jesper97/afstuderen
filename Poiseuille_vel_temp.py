@@ -218,45 +218,54 @@ R = r_phys[-1]
 umax_sim = np.amax(ux[np.int(np.rint(Nx / 2)), 1:Ny])
 u_th = umax_sim * (1 - r_phys ** 2 / R ** 2)
 
-## Line plot
-plt.figure(np.int(t/200))
-plt.plot(ux[np.int(np.rint(Nx / 2)), :], r_phys)
-plt.plot(u_th, r_phys, 'o')
-plt.title('Velocity profile of simple Poiseuille flow.')
-plt.xlabel('$u$ (m/s)')
-plt.ylabel('$r$ (m)')
-plt.savefig("Figures/Pois_temp/lineplot_temp" + str(t) + ".png")
-
 ## Vector plot
-plt.figure(np.int(t/200)+1)
-print(1, ux.T)
-print(2, uy.T)
-plt.quiver(ux.T, uy.T)
+# plt.figure(np.int(t/200)+1)
+x = np.linspace(dx, L-dx, len(ux))
+y = np.linspace(dx, H-dx, len(uy))
+# fig = ff.create_streamline(x, y, ux.T, uy.T)
+# fig.show()
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
+# plt.legend('Velocity vector')
+# plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(t-2) + ".png")
+
+# Vector plot
+plt.figure(np.int(t/200)+2, dpi=300)
+plt.quiver(Cu*ux.T, Cu*uy.T)
 plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
-plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
+plt.title(f'$u$ in gravity Poiseuille flow')
 # plt.legend('Velocity vector')
-plt.savefig("Figures/Pois_temp/arrowplot_temp" + str(t) + ".png")
-#
-# ## Heatmaps
-# plt.figure(2)
-# plt.clf()
-# plt.imshow(ux.T, cmap=cm.Blues)
-# plt.colorbar()
-# plt.savefig("Figures/Pois_temp/heatmapx_temp" + str(t) + ".png")
-# #
-# plt.figure(3)
-# plt.clf()
-# plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
-# plt.colorbar()
-# plt.savefig("Figures/Pois_temp/heatmap_uy_temp" + str(t) + ".png")
-#
-# ## Temperature heatmap
-# plt.figure(4)
-# plt.clf()
-# plt.imshow(np.flip(T_dim, axis=1).T, cmap=cm.Blues)
-# plt.colorbar()
-# plt.savefig("Figures/Pois_temp/heatmap_T" + str(t / 100) + ".png")
+plt.savefig(f"Figures/vert_pois/arrowplot_time{Time}.png")
+
+# Heatmaps
+plt.figure(2)
+plt.clf()
+plt.imshow(Cu*ux.T, cmap=cm.Blues, origin='lower')
+plt.xlabel('$x$ (# lattice nodes)')
+plt.ylabel('$y$ (# lattice nodes)')
+plt.title(f'$u_x$ in gravity Poiseuille flow')
+plt.colorbar()
+plt.savefig(f"Figures/vert_pois/heatmap_ux_time{Time}.png")
+
+plt.figure(3)
+plt.clf()
+plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
+plt.xlabel('$x$ (# lattice nodes)')
+plt.ylabel('$y$ (# lattice nodes)')
+plt.title(f'$u_y$ in gravity Poiseuille flow')
+plt.colorbar()
+plt.savefig(f"Figures/vert_pois/heatmap_uy_time{Time}.png")
+
+plt.figure(5)
+plt.clf()
+plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
+plt.xlabel('$x$ (# lattice nodes)')
+plt.ylabel('$y$ (# lattice nodes)')
+plt.title(f'$\\rho$ in gravity Poiseuille flow')
+plt.colorbar()
+plt.savefig(f"Figures/vert_pois/heatmap_rho_time{Time}.png")
 
 # ## Line plot
 # plt.figure(5)

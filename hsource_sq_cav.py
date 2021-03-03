@@ -20,9 +20,15 @@ nu = 1e-6           # m^2/s
 alpha = 1.44e-7     # m^2/s
 rho0 = 1e3          # kg/m^3
 beta = 210e-6       # 1/K
-T0 = 293            # K
-T_C = 288           # K
-T_H = 298           # K
+Lat = 334e3           # Latent heat (J/kg)
+c_p = 4.2e3         # Specific heat (J/(kgK))
+Tm = 273.15         # Melting point (K)
+h_s = c_p * Tm      # Specific enthalpy of solid (J/kg)
+h_l = h_s + Lat     # Specific enthalpy of liquid (J/kg)
+
+T0 = 271            # K
+T_C = 271           # K
+T_H = 280           # K
 umax = np.sqrt(g * beta * (T_H - T0) * L)
 
 # Dimensionless numbers
@@ -36,7 +42,7 @@ Ma = 0.1
 Lambda = 1/4
 tau_plus = 0.55
 rho0_sim = 1
-Ny = 40
+Ny = 80
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -56,6 +62,7 @@ Cu = dx / dt
 Cg = dx / dt**2
 Crho = rho0 / rho0_sim
 CF = Crho * Cg
+Ch = dx**2 / dt**2
 
 # D2Q9 lattice constants
 c_i = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]], dtype=np.int)
@@ -65,6 +72,12 @@ q = 9                               # number of directions
 
 # Simulation parameters
 alpha_sim = nu_sim / Pr
+h_s_sim = h_s / Ch
+h_l_sim = (h_s + Lat) / Ch
+Lat_sim = Lat / Ch
+
+if alpha_sim > 1/6:
+    print("alpha too large, unstable temperature")
 
 # Grid and time steps
 Nx = Ny                     # lattice nodes in the x-direction
@@ -73,13 +86,13 @@ print('Nt', Nt)
 
 # Forces
 g_sim = g / Cg * np.array([0, -1])
-# gi_sim = (g_sim * w_i / c_s**2) * np.array([0, 0, -1, 0, 1, -1, -1, 1, 1])
 
 # Initial conditions
 ux = np.zeros((Nx, Ny))                 # Simulation velocity in x direction
 uy = np.zeros((Nx, Ny))                 # Simulation velocity in y direction
 rho_sim = rho0_sim * np.ones((Nx, Ny))  # Simulation density
 T_dim = np.zeros((Nx, Ny))              # Dimensionless simulation temperature
+f_l = np.zeros((Nx, Ny))                # Liquid fraction
 
 # Temperature BCS
 T_BC_H = np.ones(Ny) * beta * (T_H - T0)
@@ -329,7 +342,7 @@ def decompose_f_i(f_i):
     return f_plus, f_minus
 
 
-def temperature(T, alpha, ux, uy, T_BC_lower, T_BC_upper):
+def temperature(T, alpha, ux, uy, T_BC_C, T_BC_H):
     T_new = np.zeros((Nx, Ny))
 
     for j in range(1, Ny-1):
@@ -340,20 +353,50 @@ def temperature(T, alpha, ux, uy, T_BC_lower, T_BC_upper):
                           + (-ux[i, j] / 4 + uy[i, j] / 4 - alpha / 2) * T[i-1, j+1] + (ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i+1, j-1] \
                           + (-ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i-1, j-1]
 
-    # easy_view(1, T_new)
     # T BCs
-    T_new[0, 1:Ny-1] = 8/15 * T_BC_lower[1:Ny-1] + 2/3 * T_new[1, 1:Ny-1] - 1/5 * T_new[2, 1:Ny-1]
-    T_new[-1, 1:Ny-1] = 8/15 * T_BC_upper[1:Ny-1] + 2/3 * T_new[-2, 1:Ny-1] - 1/5 * T_new[-3, 1:Ny-1]
-
-    # easy_view(2, T_new)
+    T_new[0, 1:Ny-1] = 8/15 * T_BC_C[1:Ny-1] + 2/3 * T_new[1, 1:Ny-1] - 1/5 * T_new[2, 1:Ny-1]
+    T_new[-1, 1:Ny-1] = 8/15 * T_BC_H[1:Ny-1] + 2/3 * T_new[-2, 1:Ny-1] - 1/5 * T_new[-3, 1:Ny-1]
 
     # Adiabatic BCs
     T_new[:, 0] = 3/2 * T_new[:, 1] - 1/2 * T_new[:, 2]
     T_new[:, -1] = 3/2 * T_new[:, -2] - 1/2 * T_new[:, -3]
 
-    # easy_view(3, T_new)
-
     return T_new
+
+
+def enthalpy(T_dim, h_s, h_l, f_l):
+    h = c_p * (T_dim / beta + T0) + Lat * f_l
+    # print(h)
+    # print(h_s)
+    # print(h_l)
+
+    for j in range(0, Ny):
+        for i in range(0, Nx):
+            if h[i, j] < h_s:
+                f_l[i, j] = 0
+            elif h[i, j] > h_l:
+                f_l[i, j] = 1
+            else:
+                f_l[i, j] = (h[i, j] - h_s) / (h_l - h_s)
+                # print(f_l[i, j])
+
+                # x = 0
+                # while True:
+                #     x += 1
+                #     h[i, j] = c_p * (T_dim[i, j] / beta + T0) + Lat * f_l[i, j]
+                #     f_l_new = (h[i, j] - h_s) / (h_l - h_s)
+                #     if x in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+                #         print(h[i, j])
+                #         print(f_l_new)
+                #
+                #     if np.abs(f_l[i, j] - f_l_new) < 0.05:
+                #         print('no')
+                #         f_l[i, j] = f_l_new
+                #         break
+                #
+                #     f_l[i, j] = f_l_new
+
+    return f_l
 
 
 # Buoyancy force
@@ -371,33 +414,38 @@ for t in range(Nt):
 
     # Calculate macroscopic quantities
     rho_sim = np.sum(f_plus, axis=2)
-    ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + F_buoy[:, :, 0] / 2
-    uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + F_buoy[:, :, 1] / 2
-    # ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho + F_g[:, :, 0] / 2
-    # uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho + F_g[:, :, 1] / 2
+    ux = f_l * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + F_buoy[:, :, 0] / 2)
+    uy = f_l * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + F_buoy[:, :, 1] / 2)
 
     # Temperature
     T_dim = temperature(T_dim, alpha_sim, ux, uy, T_BC_C, T_BC_H)
 
-    # F_g = rho_sim[:, :, None] * g_sim
+    f_l = enthalpy(T_dim, h_s, h_l, f_l)
 
     # New equilibrium distribution
-    # f_eq_plus, f_eq_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_g)
     f_eq_plus, f_eq_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
 
     # Collision step
     f_star = f_i - (f_plus - f_eq_plus) / tau_plus - (f_minus - f_eq_minus) / tau_minus + Si
-    # if t in [0, 1, 2, 3]:
-    #     print(t, f_star[:, :, 1].T)
 
     # Streaming step
     f_i = streaming(Nx, Ny, f_i, f_star)
-    # if t in [0, 1, 2, 3]:
-    #     print(t, f_i[:, :, 1].T)
     f_plus, f_minus = decompose_f_i(f_i)
+
+    if t % 2500 == 0:
+        # Heatmaps
+        plt.figure(2)
+        plt.clf()
+        plt.imshow(f_l.T, cmap=cm.Blues, origin='lower')
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'Liquid fraction, left wall at $T={T_C}K$, right wall at $T={T_H}K$')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_sq_cav/heatmap_fl_time{Time}_{t%2500}_highres.png")
 
 stop = time.time()
 print(stop-start)
+
 
 r = np.linspace(-Ny/2, Ny/2, num=Ny)
 r[0] = r[0] + (r[1] - r[0]) / 2
@@ -429,54 +477,63 @@ y = np.linspace(dx, H-dx, len(uy))
 # plt.ylabel('$y$ (# lattice nodes)')
 # plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
 # plt.legend('Velocity vector')
-# plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(t-2) + ".png")
+# plt.savefig("Figures/hsource_sq_cav/arrowplot_temp" + str(t-2) + ".png")
 
-# Vector plot
-plt.figure(np.int(t/200)+2, dpi=300)
-plt.quiver(Cu*ux.T, Cu*uy.T)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'$u$ in pipe with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
-# plt.legend('Velocity vector')
-plt.savefig(f"Figures/flow_test/arrowplot_time{Time}_test.png")
-
+# # Vector plot
+# plt.figure(np.int(t/200)+2, dpi=300)
+# plt.quiver(Cu*ux.T, Cu*uy.T)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title(f'$u$ in pipe with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+# # plt.legend('Velocity vector')
+# plt.savefig(f"Figures/hsource_sq_cav/arrowplot_time{Time}_test.png")
+#
 # Heatmaps
 plt.figure(2)
 plt.clf()
-plt.imshow(Cu*ux.T, cmap=cm.Blues, origin='lower')
+plt.imshow(f_l.T, cmap=cm.Blues, origin='lower')
 plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+plt.title(f'Liquid fraction, left wall at $T={T_H}K$, right wall at $T={T_C}K$')
 plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_ux_time{Time}_test.png")
-
-plt.figure(3)
-plt.clf()
-plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'$u_y$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
-plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_uy_time{Time}_test.png")
-
-plt.figure(5)
-plt.clf()
-plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
-plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_rho_time{Time}_test.png")
-
-## Temperature heatmap
-plt.figure(4)
-plt.clf()
-plt.imshow(np.flip(T.T, axis=0), cmap=cm.Blues)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. No flow.')
-plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_T_time{Time}_test.png")
+plt.savefig(f"Figures/hsource_sq_cav/heatmap_fl_time{Time}_test_highres.png")
+# # Heatmaps
+# plt.figure(2)
+# plt.clf()
+# plt.imshow(Cu*ux.T, cmap=cm.Blues, origin='lower')
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+# plt.colorbar()
+# plt.savefig(f"Figures/hsource_sq_cav/heatmap_ux_time{Time}_test.png")
+#
+# plt.figure(3)
+# plt.clf()
+# plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title(f'$u_y$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+# plt.colorbar()
+# plt.savefig(f"Figures/hsource_sq_cav/heatmap_uy_time{Time}_test.png")
+#
+# plt.figure(5)
+# plt.clf()
+# plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+# plt.colorbar()
+# plt.savefig(f"Figures/hsource_sq_cav/heatmap_rho_time{Time}_test.png")
+#
+# ## Temperature heatmap
+# plt.figure(4)
+# plt.clf()
+# plt.imshow(np.flip(T.T, axis=0), cmap=cm.Blues)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. No flow.')
+# plt.colorbar()
+# plt.savefig(f"Figures/hsource_sq_cav/heatmap_T_time{Time}_test.png")
 #
 # ## Temperature line plot
 # plt.figure(0)
@@ -484,4 +541,4 @@ plt.savefig(f"Figures/flow_test/heatmap_T_time{Time}_test.png")
 # plt.xlabel('$x$ (m)')
 # plt.ylabel('$T$ (K)')
 # plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. 1D cross section.')
-# plt.savefig(f"Figures/sq_cav_th/lineplot_T_adv_newBCs_time{Time}" + str() + ".png")
+# plt.savefig(f"Figures/hsource_sq_cav/lineplot_T_adv_newBCs_time{Time}" + str() + ".png")

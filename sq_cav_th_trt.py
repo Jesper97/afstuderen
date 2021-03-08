@@ -12,7 +12,7 @@ pd.set_option("display.max_rows", None, "display.max_columns", None)
 
 # Define constants
 # Physical parameters
-L = 0.0075            # m
+L = 0.0112            # m
 H = L            # m
 g = 9.81            # m/s^2
 Time = 10           # s
@@ -36,7 +36,7 @@ Ma = 0.1
 Lambda = 1/4
 tau_plus = 0.55
 rho0_sim = 1
-Ny = 40
+Ny = 20
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -423,13 +423,13 @@ T = T_dim / beta + T0
 # plt.figure(np.int(t/200)+1)
 x = np.linspace(dx, L-dx, len(ux))
 y = np.linspace(dx, H-dx, len(uy))
-# fig = ff.create_streamline(x, y, ux.T, uy.T)
-# fig.show()
-# plt.xlabel('$x$ (# lattice nodes)')
-# plt.ylabel('$y$ (# lattice nodes)')
-# plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
-# plt.legend('Velocity vector')
-# plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(t-2) + ".png")
+fig = ff.create_streamline(x, y, ux.T, uy.T)
+fig.show()
+plt.xlabel('$x$ (# lattice nodes)')
+plt.ylabel('$y$ (# lattice nodes)')
+plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
+plt.legend('Velocity vector')
+plt.savefig(f"Figures/flow_test/streamplot_time{Time}_test.png")
 
 # Vector plot
 plt.figure(np.int(t/200)+2, dpi=300)

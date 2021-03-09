@@ -15,7 +15,7 @@ pd.set_option("display.max_rows", None, "display.max_columns", None)
 L = 0.01            # m
 H = L            # m
 g = 9.81            # m/s^2
-Time = 20           # s
+Time = 50           # s
 nu = 1e-6           # m^2/s
 alpha = 1.44e-7     # m^2/s
 rho0 = 1e3          # kg/m^3
@@ -342,10 +342,9 @@ def decompose_f_i(f_i):
     return f_plus, f_minus
 
 
-def temperature(T, alpha, Lat, c_p, beta, ux, uy, T_dim_C, T_dim_H, f_l_old_tstep):
+def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
     T_new = np.zeros((Nx, Ny))
-    h = np.zeros((Nx, Ny))
-    f_l = f_l_old_tstep
+    f_l = f_l_old_tstep.copy()
 
     def liq_fraction(T_new, f_l):
         h = c_p * (T_new / beta + T0) + Lat * f_l
@@ -362,6 +361,7 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, T_dim_C, T_dim_H, f_l_old_tste
     for j in range(1, Ny-1):
         for i in range(1, Nx-1):
             f_l_old_iter = -10
+
             while True:
                 T_new[i, j] = (1 - 6 * alpha) * T[i, j] + (2 * alpha - ux[i, j]) * T[i+1, j] \
                               + (2 * alpha + ux[i, j]) * T[i-1, j] + (2 * alpha - uy[i, j]) * T[i, j+1] \
@@ -371,23 +371,40 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, T_dim_C, T_dim_H, f_l_old_tste
 
                 f_l[i, j] = liq_fraction(T_new[i, j], f_l[i, j])
 
+                if t > 1500: #in [288, 289]:
+                    if i == 1 and j in [1, 2]:
+                        x = beta * Lat / c_p * (f_l[i, j] - f_l_old_tstep[i, j])
+                        print("(i, j) = (", i, j, "),", "T =", T_new[i, j] / beta + T0)
+                        print("(i, j) = (", i, j, "),", "T =", f_l[i, j])
+                        # print("(i, j) = (", i, j, "),", "T =", x)
+
                 if np.abs(f_l[i, j] - f_l_old_iter) < 1e-3:
                     break
 
-                f_l_old_iter = f_l[i, j]
+                f_l_old_iter = f_l[i, j].copy()
 
     # T BCs
     #### Moeten ook een heat sink krijgen
     for j in range(1, Ny-1):
         f_l_old_iter = -10
         while True:
-            T_new[0, j] = 8 / 15 * T_dim_H[j] + 2 / 3 * T_new[1, j] - 1 / 5 * T_new[2, j] - beta * Lat / c_p * (f_l[0, j] - f_l_old_tstep[0, j])
+            T_new[0, j] = 8/15 * T_dim_H[j] + 2/3 * T_new[1, j] - 1/5 * T_new[2, j] - beta * Lat / c_p * (f_l[0, j] - f_l_old_tstep[0, j])
             f_l[0, j] = liq_fraction(T_new[0, j], f_l[0, j])
 
             if np.abs(f_l[0, j] - f_l_old_iter) < 1e-3:
                 break
 
             f_l_old_iter = f_l[0, j]
+
+        f_l_old_iter = -10
+        while True:
+            T_new[-1, j] = 3/2 * T_new[-2, j] - 1/2 * T_new[-3, j] - beta * Lat / c_p * (f_l[-1, j] - f_l_old_tstep[-1, j])
+            f_l[-1, j] = liq_fraction(T_new[-1, j], f_l[-1, j])
+
+            if np.abs(f_l[-1, j] - f_l_old_iter) < 1e-3:
+                break
+
+            f_l_old_iter = f_l[-1, j]
 
         # f_l_old_iter = -10
         # while True:
@@ -398,9 +415,6 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, T_dim_C, T_dim_H, f_l_old_tste
         #         break
         #
         #     f_l_old_iter = f_l[-1, j]
-
-    # T_new[0, 1:Ny-1] = 8 / 15 * T_dim_C[1:Ny - 1] + 2 / 3 * T_new[1, 1:Ny - 1] - 1 / 5 * T_new[2, 1:Ny - 1]
-    # T_new[-1, 1:Ny-1] = 8 / 15 * T_dim_H[1:Ny - 1] + 2 / 3 * T_new[-2, 1:Ny - 1] - 1 / 5 * T_new[-3, 1:Ny - 1]
 
     # Adiabatic BCs
     for i in range(0, Nx):
@@ -424,9 +438,6 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, T_dim_C, T_dim_H, f_l_old_tste
 
             f_l_old_iter = f_l[i, -1]
 
-    # T_new[:, 0] = 3/2 * T_new[:, 1] - 1/2 * T_new[:, 2]
-    # T_new[:, -1] = 3/2 * T_new[:, -2] - 1/2 * T_new[:, -3]
-
     return T_new, f_l
 
 
@@ -449,9 +460,9 @@ for t in range(Nt):
     uy = f_l * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + F_buoy[:, :, 1] / 2)
 
     # Temperature
-    T_dim, f_l = temperature(T_dim, alpha_sim, Lat, c_p, beta, ux, uy, T_dim_C, T_dim_H, f_l)
-    easy_view(1, T_dim / beta + T0)
-    easy_view(2, f_l)
+    T_dim, f_l = temperature(T_dim, alpha_sim, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l)
+    # easy_view(t, T_dim / beta + T0)
+    # easy_view(t, f_l)
 
     # New equilibrium distribution
     f_eq_plus, f_eq_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
@@ -463,7 +474,7 @@ for t in range(Nt):
     f_i = streaming(Nx, Ny, f_i, f_star)
     f_plus, f_minus = decompose_f_i(f_i)
 
-    if t % 50 == 0:
+    if t % 300 == 0:
         # Heatmaps
         plt.figure(2)
         plt.clf()
@@ -472,7 +483,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'Liquid fraction, left wall at $T={T_C}K$, right wall at $T={T_H}K$, $t={t/Nt*Time}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_sq_cav/1/heatmap_fl_time{Time}_{t/Nt*Time}_test.png")
+        plt.savefig(f"Figures/hsource_sq_cav/2/heatmap_fl_time{Time}_{t/Nt*Time}_test.png")
 
 stop = time.time()
 print(stop-start)
@@ -499,11 +510,11 @@ T = T_dim / beta + T0
 # plt.show()
 
 ## Vector plot
-# plt.figure(np.int(t/200)+1)
-x = np.linspace(dx, L-dx, len(ux))
-y = np.linspace(dx, H-dx, len(uy))
+# # plt.figure(np.int(t/200)+1)
+# x = np.linspace(dx, L-dx, len(ux))
+# y = np.linspace(dx, H-dx, len(uy))
 # fig = ff.create_streamline(x, y, ux.T, uy.T)
-# fig.show()
+# # fig.show()
 # plt.xlabel('$x$ (# lattice nodes)')
 # plt.ylabel('$y$ (# lattice nodes)')
 # plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
@@ -517,7 +528,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'$u$ in pipe with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
 # plt.legend('Velocity vector')
-plt.savefig(f"Figures/hsource_sq_cav/arrowplot_time{Time}_test.png")
+plt.savefig(f"Figures/hsource_sq_cav/2/arrowplot_time{Time}_test.png")
 
 # Heatmaps
 plt.figure(1)
@@ -527,7 +538,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'Liquid fraction, left wall at $T={T_H}K$, right wall at $T={T_C}K$, $t={Nt/t}$')
 plt.colorbar()
-plt.savefig(f"Figures/hsource_sq_cav/heatmap_fl_time{Time}_test_highhighres.png")
+plt.savefig(f"Figures/hsource_sq_cav/2/heatmap_fl_time{Time}_test_highhighres.png")
 # Heatmaps
 plt.figure(2)
 plt.clf()
@@ -536,7 +547,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
 plt.colorbar()
-plt.savefig(f"Figures/hsource_sq_cav/heatmap_ux_time{Time}_test.png")
+plt.savefig(f"Figures/hsource_sq_cav/2/heatmap_ux_time{Time}_test.png")
 
 plt.figure(3)
 plt.clf()
@@ -545,7 +556,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'$u_y$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
 plt.colorbar()
-plt.savefig(f"Figures/hsource_sq_cav/heatmap_uy_time{Time}_test.png")
+plt.savefig(f"Figures/hsource_sq_cav/2/heatmap_uy_time{Time}_test.png")
 
 plt.figure(5)
 plt.clf()
@@ -554,7 +565,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
 plt.colorbar()
-plt.savefig(f"Figures/hsource_sq_cav/heatmap_rho_time{Time}_test.png")
+plt.savefig(f"Figures/hsource_sq_cav/2/heatmap_rho_time{Time}_test.png")
 
 ## Temperature heatmap
 plt.figure(4)
@@ -564,7 +575,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. No flow.')
 plt.colorbar()
-plt.savefig(f"Figures/hsource_sq_cav/heatmap_T_time{Time}_test.png")
+plt.savefig(f"Figures/hsource_sq_cav/2/heatmap_T_time{Time}_test.png")
 
 # ## Temperature line plot
 # plt.figure(0)
@@ -572,4 +583,4 @@ plt.savefig(f"Figures/hsource_sq_cav/heatmap_T_time{Time}_test.png")
 # plt.xlabel('$x$ (m)')
 # plt.ylabel('$T$ (K)')
 # plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. 1D cross section.')
-# plt.savefig(f"Figures/hsource_sq_cav/lineplot_T_adv_newBCs_time{Time}" + str() + ".png")
+# plt.savefig(f"Figures/hsource_sq_cav/2/lineplot_T_adv_newBCs_time{Time}" + str() + ".png")

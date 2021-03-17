@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-import plotly.figure_factory as ff
 import sys
 import time
 from matplotlib import cm
@@ -9,14 +8,14 @@ from numba import jit
 
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
-folder_nr = 1
+folder_nr = 6
 
 # Define constants
 # Physical parameters
 L = 0.004            # m
 H = L            # m
 g = 9.81            # m/s^2
-Time = 0.10           # s
+Time = 200           # s
 nu = 1e-6           # m^2/s
 alpha = 1.44e-7     # m^2/s
 rho0 = 1e3          # kg/m^3
@@ -27,9 +26,9 @@ Tm = 273.15         # Melting point (K)
 h_s = c_p * Tm      # Specific enthalpy of solid (J/kg)
 h_l = h_s + Lat     # Specific enthalpy of liquid (J/kg)
 
-T0 = 271            # K
-T_C = 271           # K
-T_H = 280           # K
+T0 = 270            # K
+T_C = 274           # K
+T_H = 285           # K
 umax = np.sqrt(g * beta * (T_H - T0) * L)
 
 # Dimensionless numbers
@@ -371,7 +370,7 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
                               + (-ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i-1, j-1] - beta * Lat / c_p * (f_l[i, j] - f_l_old_tstep[i, j])
 
                 f_l[i, j] = liq_fraction(T_new[i, j], f_l[i, j])
-
+                #
                 # if t in [46, 47]: #in [288, 289]:
                 #     if i == 1:# and j in [1, 2]:
                 #         x = beta * Lat / c_p * (f_l[i, j] - f_l_old_tstep[i, j])
@@ -379,7 +378,7 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
                 #         print("(i, j) = (", i, j, "),", "f_l =", f_l[i, j])
                 #         print("(i, j) = (", i, j, "),", "x =", x)
 
-                if np.abs(f_l[i, j] - f_l_old_iter) < 1e-5:
+                if np.abs(f_l[i, j] - f_l_old_iter) < 1e-6:
                     break
 
                 f_l_old_iter = f_l[i, j].copy()
@@ -405,6 +404,9 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
     f_l[:, 0] = 3/2 * f_l[:, 1] - 1/2 * f_l[:, 2]
     f_l[:, -1] = 3/2 * f_l[:, -2] - 1/2 * f_l[:, -3]
 
+    # f_l = np.zeros((Nx, Ny))                # Liquid fraction
+    # f_l[0:10, :] = 1
+
     return T_new, f_l
 
 
@@ -422,7 +424,8 @@ f_star = np.zeros((Nx, Ny, q))
 
 for t in range(Nt):
     # Buoyancy force
-    F_buoy = - T_dim[:, :, None] * g_sim
+    T_avg_fluid = 
+    F_buoy = - (T_dim[:, :, None] * g_sim
 
     # Calculate macroscopic quantities
     rho_sim = np.sum(f_plus, axis=2)
@@ -431,8 +434,6 @@ for t in range(Nt):
 
     # Temperature
     T_dim, f_l = temperature(T_dim, alpha_sim, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l)
-    # easy_view(t, T_dim / beta + T0)
-    # easy_view(t, f_l)
 
     # New equilibrium distribution
     f_eq, f_eq_plus, f_eq_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
@@ -440,45 +441,57 @@ for t in range(Nt):
     # Collision step
     B = (1 - f_l) * (tau_plus - 1/2) / (f_l + tau_plus - 1/2)
     Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)
-    # f_star = f_plus * (1 - (1 - Bi) / tau_plus) + f_minus * (1 - (1 - Bi) / tau_minus - 2*Bi) \
-    #          + f_eq_plus * ((1 - Bi) / tau_plus - 1) + f_eq_minus * ((1 - Bi) / tau_minus + 1) + Bi * rho_sim[:, :, None] * w_i #+ Si
-    # f_star = f_i + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_eq_plus + f_eq_minus - f_i + rho_sim[:, :, None] * w_i) #+ Si
-    for i in range(q):
-        f_star[:, :, i] = f_i[:, :, i] + (1-B) / tau_plus * (-(f_i[:, :, i] - f_eq[:, :, i])) + B * (f_i[:, :, c_opp[i]] - f_eq[:, :, c_opp[i]] - f_i[:, :, i] + rho_sim[:, :] * w_i[i])
+    # f_star = f_i + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_eq_plus + f_eq_minus - f_i + rho_sim[:, :, None] * w_i) + Si
+    f_star = f_plus * (1 - (1 - Bi) / tau_plus) + f_minus * (1 - (1 - Bi) / tau_minus - 2*Bi) + f_eq_plus * ((1 - Bi) / tau_plus - Bi) + f_eq_minus * ((1 - Bi) / tau_minus + Bi) + (rho_sim[:, :, None] * w_i) * Bi
 
     # Streaming step
     f_i = streaming(Nx, Ny, f_i, f_star)
     f_plus, f_minus = decompose_f_i(f_i)
 
-    # if t % 299 == 0:
-    #     # Heatmaps
-    #     plt.figure(2)
-    #     plt.clf()
-    #     plt.imshow(f_l.T, cmap=cm.Blues, origin='lower', aspect=1.0)
-    #     plt.xlabel('$x$ (# lattice nodes)')
-    #     plt.ylabel('$y$ (# lattice nodes)')
-    #     plt.title(f'Liquid fraction, left wall at $T={T_C}K$, right wall at $T={T_H}K$, $t={t/Nt*Time}s$')
-    #     plt.colorbar()
-    #     plt.savefig(f"Figures/hsource_sq_cav/{folder_nr}/heatmap_fl_time{Time}_{t/Nt*Time}_test.png")
+    # if t % 1000 == 0:
+    #     easy_view(t, f_l)
+    #     easy_view(t, uy)
+    #     easy_view(t, T_dim / beta + T0)
 
-    if t % 6 == 0:
-        # plt.figure(2)
+    if (t % 250 == 0):
+        # Heatmaps
+        # plt.figure(t)
+        # plt.imshow(f_l.T, cmap=cm.Blues, origin='lower', aspect=1.0)
+        # plt.xlabel('$x$ (# lattice nodes)')
+        # plt.ylabel('$y$ (# lattice nodes)')
+        # plt.title(f'Liquid fraction, left wall at $T={T_H}K$, $t={np.int(t/Nt*Time)}s$')
+        # plt.colorbar()
+        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
+        #
+        # plt.figure(t+1)
+        # plt.clf()
+        # plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
+        # plt.xlabel('$x$ (# lattice nodes)')
+        # plt.ylabel('$y$ (# lattice nodes)')
+        # plt.title(f'$u_y$ in square cavity with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=3)}s$')
+        # plt.colorbar()
+        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
+        #
+        # plt.figure(t)
         # plt.clf()
         # plt.imshow(Cu*ux.T, cmap=cm.Blues, origin='lower')
         # plt.xlabel('$x$ (# lattice nodes)')
         # plt.ylabel('$y$ (# lattice nodes)')
-        # plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+        # plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=3)}s$')
         # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_time{Time}_t={t}_test.png")
+        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
 
-        plt.figure(3)
+        plt.figure(t+2)
         plt.clf()
-        plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
+        plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
         plt.xlabel('$x$ (# lattice nodes)')
         plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'$u_y$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+        plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_time{Time}_t={t}_bgk_forloop.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_rho_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
+
+        easy_view(t, uy)
+        easy_view(t, f_l)
 
     # if t > 300:
     # easy_view(t, f_l)
@@ -508,7 +521,7 @@ T = T_dim / beta + T0
 # plt.streamplot(X, Y, ux.T, uy.T)
 # plt.show()
 
-## Vector plot
+## Stream plot
 # # plt.figure(np.int(t/200)+1)
 # x = np.linspace(dx, L-dx, len(ux))
 # y = np.linspace(dx, H-dx, len(uy))
@@ -525,7 +538,7 @@ T = T_dim / beta + T0
 # plt.quiver(Cu*ux.T, Cu*uy.T)
 # plt.xlabel('$x$ (# lattice nodes)')
 # plt.ylabel('$y$ (# lattice nodes)')
-# plt.title(f'$u$ in pipe with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+# plt.title(f'$u$ in pipe with left wall at $T={T_H}K$')
 # # plt.legend('Velocity vector')
 # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/arrowplot_time{Time}_test.png")
 #
@@ -535,7 +548,7 @@ T = T_dim / beta + T0
 # plt.imshow(f_l.T, cmap=cm.Blues, origin='lower')
 # plt.xlabel('$x$ (# lattice nodes)')
 # plt.ylabel('$y$ (# lattice nodes)')
-# plt.title(f'Liquid fraction, left wall at $T={T_H}K$, right wall at $T={T_C}K$, $t={Nt/t}$')
+# plt.title(f'Liquid fraction, left wall at $T={T_H}K$, $t={Nt/t}$')
 # plt.colorbar()
 # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_time{Time}_test2.png")
 # Heatmaps

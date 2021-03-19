@@ -8,61 +8,64 @@ from numba import jit
 
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
-folder_nr = 6
+folder_nr = 'test'
 
 # Define constants
 # Physical parameters
-L = 0.004            # m
-H = L            # m
-g = 9.81            # m/s^2
-Time = 200           # s
-nu = 1e-6           # m^2/s
-alpha = 1.44e-7     # m^2/s
-rho0 = 1e3          # kg/m^3
-beta = 210e-6       # 1/K
-Lat = 334e3           # Latent heat (J/kg)
+L = 0.002           # Length of cavity (m)
+H = L               # Height of cavity (m)
+g = 9.81            # Gravitational acceleration (m/s^2)
+Time = 3            # (s)
+nu = 1e-6           # Kinematic viscosity (m^2/s)
+alpha = 1.44e-7     # Thermal diffusivity (m^2/s)
+rho0 = 1e3          # Density (kg/m^3)
+beta = 210e-6       # Thermal expansion (1/K)
+Lat = 334e3         # Latent heat (J/kg)
 c_p = 4.2e3         # Specific heat (J/(kgK))
 Tm = 273.15         # Melting point (K)
 h_s = c_p * Tm      # Specific enthalpy of solid (J/kg)
 h_l = h_s + Lat     # Specific enthalpy of liquid (J/kg)
 
-T0 = 270            # K
-T_C = 274           # K
-T_H = 285           # K
-umax = np.sqrt(g * beta * (T_H - T0) * L)
+T0 = 270            # Starting temperature (K)
+T_H = 285           # Wall temperature (K)
+umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Dimensionless numbers
-Re = umax * H / nu
-Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha)
+Re = umax * H / nu                                  # Reynolds number
+Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha)    # Rayleigh number
 print('Ra', Ra)
-Pr = 7
-Ma = 0.1
+Pr = 7                                              # Prandtl number
+Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
-Lambda = 1/4
-tau_plus = 1
-rho0_sim = 1
-Ny = 30
+Lambda = 1/4        # Magic parameter
+tau_plus = 1        # Even relaxation time
+rho0_sim = 1        # Starting simulation density
+Ny = 20             # Nodes in y-direction
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
-c_s = (1 / np.sqrt(3)) * (dx_sim / dt_sim)  # speed of sound
-nu_sim = c_s**2 * (tau_plus - 1 / 2)
+c_s = (1 / np.sqrt(3)) * (dx_sim / dt_sim)              # Simulation speed of sound
+nu_sim = c_s**2 * (tau_plus - 1 / 2)                    # Simulation viscosity
 print('nu_sim', nu_sim)
 
 # Determine dependent parameters
-umax_sim = Re * nu_sim / Ny
+umax_sim = Re * nu_sim / Ny                             # Maximal simulation density
 print('umax_sim', umax_sim)
 tau_minus = dt_sim * (Lambda / (tau_plus / dt_sim - 1/2) + 1/2)
+alpha_sim = nu_sim / Pr
+
+if alpha_sim > 1/6:
+    print("alpha too large, unstable temperature")
 
 # Calculate conversion parameters
-dx = H / Ny
-dt = c_s ** 2 * (tau_plus - 1 / 2) * dx ** 2 / nu
-Cu = dx / dt
-Cg = dx / dt**2
-Crho = rho0 / rho0_sim
-CF = Crho * Cg
-Ch = dx**2 / dt**2
+dx = H / Ny                                             # Distance
+dt = c_s ** 2 * (tau_plus - 1 / 2) * dx ** 2 / nu       # Time
+Cu = dx / dt                                            # Velocity
+Cg = dx / dt**2                                         # Acceleration
+Crho = rho0 / rho0_sim                                  # Density
+CF = Crho * Cg                                          # Force
+Ch = dx**2 / dt**2                                      # Specific enthalpy
 
 # D2Q9 lattice constants
 c_i = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]], dtype=np.int)
@@ -70,22 +73,13 @@ c_opp = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], dtype=np.int)
 w_i = np.array([4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36])
 q = 9                               # number of directions
 
-# Simulation parameters
-alpha_sim = nu_sim / Pr
-h_s_sim = h_s / Ch
-h_l_sim = (h_s + Lat) / Ch
-Lat_sim = Lat / Ch
-
-if alpha_sim > 1/6:
-    print("alpha too large, unstable temperature")
-
 # Grid and time steps
-Nx = Ny                     # lattice nodes in the x-direction
-Nt = np.int(Time / dt)         # time steps
+Nx = Ny                                 # Number of lattice nodes in x-direction
+Nt = np.int(Time / dt)                  # Number of time steps
 print('Nt', Nt)
 
 # Forces
-g_sim = g / Cg * np.array([0, -1])
+g_sim = g / Cg * np.array([0, -1])      # Simulation acceleration vector
 
 # Initial conditions
 ux = np.zeros((Nx, Ny))                 # Simulation velocity in x direction
@@ -96,7 +90,6 @@ f_l = np.zeros((Nx, Ny))                # Liquid fraction
 
 # Temperature BCS
 T_dim_H = np.ones(Ny) * beta * (T_H - T0)
-T_dim_C = np.ones(Ny) * beta * (T_C - T0)
 
 def easy_view(nr, arr):
     idx = ["idx" for i in arr[1, :]]
@@ -107,7 +100,7 @@ def easy_view(nr, arr):
 
 @jit
 def fluid(Nx, Ny, f_i, f_star):
-    for i in range(1, Nx-1):
+    for i in range(1, Nx-1):        # Streaming in the
         f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
         f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
         f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
@@ -195,10 +188,8 @@ def lower_left_corner(f_i, f_star):
     f_i[i, j, 3] = f_star[i+1, j, 3]
     f_i[i, j, 4] = f_star[i, j+1, 4]
     f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
-    # f_i[i, j, 6] = 0
     f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
     f_i[i, j, 7] = f_star[i+1, j+1, 7]
-    # f_i[i, j, 8] = 0
     f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
 
     return f_i
@@ -213,10 +204,8 @@ def lower_right_corner(Nx, f_i, f_star):
     f_i[i, j, 2] = f_star[i, j, 4]                  # Bounce
     f_i[i, j, 3] = f_star[i, j, 1]                  # Bounce
     f_i[i, j, 4] = f_star[i, j+1, 4]
-    # f_i[i, j, 5] = 0
     f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
     f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
-    # f_i[i, j, 7] = 0
     f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
     f_i[i, j, 8] = f_star[i-1, j+1, 8]
 
@@ -232,10 +221,8 @@ def upper_left_corner(f_i, f_star):
     f_i[i, j, 2] = f_star[i, j-1, 2]
     f_i[i, j, 3] = f_star[i+1, j, 3]
     f_i[i, j, 4] = f_star[i, j, 2]                  # Bounce
-    # f_i[i, j, 5] = 0
     f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
     f_i[i, j, 6] = f_star[i+1, j-1, 6]
-    # f_i[i, j, 7] = 0
     f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
     f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
 
@@ -252,10 +239,8 @@ def upper_right_corner(f_i, f_star):
     f_i[i, j, 3] = f_star[i, j, 1]                  # Bounce
     f_i[i, j, 4] = f_star[i, j, 2]                  # Bounce
     f_i[i, j, 5] = f_star[i-1, j-1, 5]
-    # f_i[i, j, 6] = 0
     f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
     f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
-    # f_i[i, j, 8] = 0
     f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
 
     return f_i
@@ -274,70 +259,73 @@ def streaming(Nx, Ny, f_i, f_star):
     return f_i
 
 @jit
-def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s, F):
-    f_eq = np.zeros((Nx, Ny, q))
+def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
     f_eq_plus = np.zeros((Nx, Ny, q))
     f_eq_minus = np.zeros((Nx, Ny, q))
-    u_dot_c = np.zeros((Nx, Ny, q))
+
+    u_dot_u = ux**2 + uy**2
+
+    for i in range(q):
+        if i == 0:
+            u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
+            f_eq_plus[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :] / c_s**2) + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
+        elif i in [1, 2, 5, 6]:
+            u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
+            f_eq_plus[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
+            f_eq_minus[:, :, i] = w_i[i] * rho * (u_dot_c[:, :] / c_s**2)
+        else:
+            f_eq_plus[:, :, i] = f_eq_plus[:, :, c_opp[i]]
+            f_eq_minus[:, :, i] = -f_eq_minus[:, :, c_opp[i]]
+
+    return f_eq_plus, f_eq_minus
+
+@jit
+def force_source(w_i, c_i, c_s, tau_plus, F):
     Fi = np.zeros((Nx, Ny, q))
     Si = np.zeros((Nx, Ny, q))
 
-    u_dot_u = ux**2 + uy**2
     u_dot_F = ux * F[:, :, 0] + uy * F[:, :, 1]
 
     for i in range(q):
-        u_dot_c[:, :, i] = ux * c_i[i, 0] + uy * c_i[i, 1]
-        f_eq[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :, i] / c_s**2) + (u_dot_c[:, :, i]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
+        u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
 
         Fi[:, :, i] = F[:, :, 0] * c_i[i, 0] + F[:, :, 1] * c_i[i, 1]
-        Si[:, :, i] = (tau_plus - 1/2) * w_i[i] * (u_dot_c[:, :, i] * Fi[:, :, i] / c_s**2 - u_dot_F) + (tau_minus - 1/2) * w_i[i] * Fi[:, :, i]
+        Si[:, :, i] = (tau_plus - 1/2) * w_i[i] * (u_dot_c[:, :] * Fi[:, :, i] / c_s**2 - u_dot_F) + (tau_minus - 1/2) * w_i[i] * Fi[:, :, i]
 
-    f_eq_plus[:, :, 0] = f_eq[:, :, 0]
-    f_eq_plus[:, :, 1] = (f_eq[:, :, 1] + f_eq[:, :, 3]) / 2
-    f_eq_plus[:, :, 2] = (f_eq[:, :, 2] + f_eq[:, :, 4]) / 2
-    f_eq_plus[:, :, 3] = f_eq_plus[:, :, 1]
-    f_eq_plus[:, :, 4] = f_eq_plus[:, :, 2]
-    f_eq_plus[:, :, 5] = (f_eq[:, :, 5] + f_eq[:, :, 7]) / 2
-    f_eq_plus[:, :, 6] = (f_eq[:, :, 6] + f_eq[:, :, 8]) / 2
-    f_eq_plus[:, :, 7] = f_eq_plus[:, :, 5]
-    f_eq_plus[:, :, 8] = f_eq_plus[:, :, 6]
-
-    f_eq_minus[:, :, 0] = 0
-    f_eq_minus[:, :, 1] = (f_eq[:, :, 1] - f_eq[:, :, 3]) / 2
-    f_eq_minus[:, :, 2] = (f_eq[:, :, 2] - f_eq[:, :, 4]) / 2
-    f_eq_minus[:, :, 3] = -f_eq_minus[:, :, 1]
-    f_eq_minus[:, :, 4] = -f_eq_minus[:, :, 2]
-    f_eq_minus[:, :, 5] = (f_eq[:, :, 5] - f_eq[:, :, 7]) / 2
-    f_eq_minus[:, :, 6] = (f_eq[:, :, 6] - f_eq[:, :, 8]) / 2
-    f_eq_minus[:, :, 7] = -f_eq_minus[:, :, 5]
-    f_eq_minus[:, :, 8] = -f_eq_minus[:, :, 6]
-
-    return f_eq, f_eq_plus, f_eq_minus, Si
+    return Si
 
 @jit
-def decompose_f_i(f_i):
-    f_plus = np.zeros((Nx, Ny, q))
-    f_minus = np.zeros((Nx, Ny, q))
+def decompose_f_i(q, f_plus, f_minus, f_i):
+    for i in range(q):
+        if i == 0:
+            f_plus[:, :, i] = f_i[:, :, i]
+            f_minus[:, :, i] = 0
+        elif i in [1, 2, 5, 6]:
+            f_plus[:, :, i] = (f_i[:, :, i] + f_i[:, :, c_opp[i]]) / 2
+            f_minus[:, :, i] = f_i[:, :, i] - f_plus[:, :, i]
+        else:
+            f_plus[:, :, i] = f_plus[:, :, c_opp[i]]
+            f_minus[:, :, i] = -f_minus[:, :, c_opp[i]]
 
-    f_plus[:, :, 0] = f_i[:, :, 0]
-    f_plus[:, :, 1] = (f_i[:, :, 1] + f_i[:, :, 3]) / 2
-    f_plus[:, :, 2] = (f_i[:, :, 2] + f_i[:, :, 4]) / 2
-    f_plus[:, :, 3] = f_plus[:, :, 1]
-    f_plus[:, :, 4] = f_plus[:, :, 2]
-    f_plus[:, :, 5] = (f_i[:, :, 5] + f_i[:, :, 7]) / 2
-    f_plus[:, :, 6] = (f_i[:, :, 6] + f_i[:, :, 8]) / 2
-    f_plus[:, :, 7] = f_plus[:, :, 5]
-    f_plus[:, :, 8] = f_plus[:, :, 6]
-
-    f_minus[:, :, 0] = 0
-    f_minus[:, :, 1] = (f_i[:, :, 1] - f_i[:, :, 3]) / 2
-    f_minus[:, :, 2] = (f_i[:, :, 2] - f_i[:, :, 4]) / 2
-    f_minus[:, :, 3] = -f_minus[:, :, 1]
-    f_minus[:, :, 4] = -f_minus[:, :, 2]
-    f_minus[:, :, 5] = (f_i[:, :, 5] - f_i[:, :, 7]) / 2
-    f_minus[:, :, 6] = (f_i[:, :, 6] - f_i[:, :, 8]) / 2
-    f_minus[:, :, 7] = -f_minus[:, :, 5]
-    f_minus[:, :, 8] = -f_minus[:, :, 6]
+    # f_plus[:, :, 0] = f_i[:, :, 0]
+    # f_plus[:, :, 1] = (f_i[:, :, 1] + f_i[:, :, 3]) / 2
+    # f_plus[:, :, 2] = (f_i[:, :, 2] + f_i[:, :, 4]) / 2
+    # f_plus[:, :, 3] = f_plus[:, :, 1]
+    # f_plus[:, :, 4] = f_plus[:, :, 2]
+    # f_plus[:, :, 5] = (f_i[:, :, 5] + f_i[:, :, 7]) / 2
+    # f_plus[:, :, 6] = (f_i[:, :, 6] + f_i[:, :, 8]) / 2
+    # f_plus[:, :, 7] = f_plus[:, :, 5]
+    # f_plus[:, :, 8] = f_plus[:, :, 6]
+    #
+    # f_minus[:, :, 0] = 0
+    # f_minus[:, :, 1] = (f_i[:, :, 1] - f_i[:, :, 3]) / 2
+    # f_minus[:, :, 2] = (f_i[:, :, 2] - f_i[:, :, 4]) / 2
+    # f_minus[:, :, 3] = -f_minus[:, :, 1]
+    # f_minus[:, :, 4] = -f_minus[:, :, 2]
+    # f_minus[:, :, 5] = (f_i[:, :, 5] - f_i[:, :, 7]) / 2
+    # f_minus[:, :, 6] = (f_i[:, :, 6] - f_i[:, :, 8]) / 2
+    # f_minus[:, :, 7] = -f_minus[:, :, 5]
+    # f_minus[:, :, 8] = -f_minus[:, :, 6]
 
     return f_plus, f_minus
 
@@ -370,13 +358,6 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
                               + (-ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i-1, j-1] - beta * Lat / c_p * (f_l[i, j] - f_l_old_tstep[i, j])
 
                 f_l[i, j] = liq_fraction(T_new[i, j], f_l[i, j])
-                #
-                # if t in [46, 47]: #in [288, 289]:
-                #     if i == 1:# and j in [1, 2]:
-                #         x = beta * Lat / c_p * (f_l[i, j] - f_l_old_tstep[i, j])
-                #         print("(i, j) = (", i, j, "),", "T =", T_new[i, j] / beta + T0)
-                #         print("(i, j) = (", i, j, "),", "f_l =", f_l[i, j])
-                #         print("(i, j) = (", i, j, "),", "x =", x)
 
                 if np.abs(f_l[i, j] - f_l_old_iter) < 1e-6:
                     break
@@ -411,95 +392,96 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
 
 
 # Buoyancy force
-F_buoy = - T_dim[:, :, None] * g_sim
+F_buoy = - T_dim[:, :, None] * g_sim * 0
 
 # Initialize equilibrium function
-f_eq, f_plus, f_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
-f_i = f_eq
-# f_i = f_plus + f_minus
+f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)
+f_i = f_plus + f_minus
 
 start = time.time()
 
 f_star = np.zeros((Nx, Ny, q))
-
+# Nt = 10
 for t in range(Nt):
+    B = (1 - f_l) * (tau_plus - 1/2) / (f_l + tau_plus - 1/2)               # Viscosity-dependent solid fraction
+
     # Buoyancy force
-    T_avg_fluid = 
-    F_buoy = - (T_dim[:, :, None] * g_sim
+    if np.any(f_l[f_l == 1]):                                               # Check if at least one cell is fully liquid
+        T_dim_avg_l = np.mean(T_dim[f_l == 1])
+        F_buoy = - (T_dim[:, :, None] - T_dim_avg_l) * g_sim
+    else:
+        F_buoy = - T_dim[:, :, None] * g_sim
 
     # Calculate macroscopic quantities
     rho_sim = np.sum(f_plus, axis=2)
-    ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + F_buoy[:, :, 0] / 2
-    uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + F_buoy[:, :, 1] / 2
+
+    ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0]
+    uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1]
+
+    ux[B == 1] = 0
+    uy[B == 1] = 0
 
     # Temperature
     T_dim, f_l = temperature(T_dim, alpha_sim, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l)
 
     # New equilibrium distribution
-    f_eq, f_eq_plus, f_eq_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
+    f_eq_plus, f_eq_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)
 
     # Collision step
-    B = (1 - f_l) * (tau_plus - 1/2) / (f_l + tau_plus - 1/2)
+    Si = force_source(w_i, c_i, c_s, tau_plus, F_buoy)
     Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)
-    # f_star = f_i + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_eq_plus + f_eq_minus - f_i + rho_sim[:, :, None] * w_i) + Si
-    f_star = f_plus * (1 - (1 - Bi) / tau_plus) + f_minus * (1 - (1 - Bi) / tau_minus - 2*Bi) + f_eq_plus * ((1 - Bi) / tau_plus - Bi) + f_eq_minus * ((1 - Bi) / tau_minus + Bi) + (rho_sim[:, :, None] * w_i) * Bi
+    f_star = f_plus + f_minus + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_plus + f_minus) + (1-Bi) * Si
+    # f_star = f_plus * (1 - (1-Bi) / tau_plus) + f_minus * (1 - 2*Bi - (1-Bi) / tau_minus) + f_eq_plus * (1-Bi) / tau_plus + f_eq_minus * (1-Bi) / tau_minus + Si * (1-Bi)
 
     # Streaming step
     f_i = streaming(Nx, Ny, f_i, f_star)
-    f_plus, f_minus = decompose_f_i(f_i)
-
-    # if t % 1000 == 0:
-    #     easy_view(t, f_l)
-    #     easy_view(t, uy)
-    #     easy_view(t, T_dim / beta + T0)
+    f_plus, f_minus = decompose_f_i(q, f_plus, f_minus, f_i)
 
     if (t % 250 == 0):
         # Heatmaps
-        # plt.figure(t)
-        # plt.imshow(f_l.T, cmap=cm.Blues, origin='lower', aspect=1.0)
-        # plt.xlabel('$x$ (# lattice nodes)')
-        # plt.ylabel('$y$ (# lattice nodes)')
-        # plt.title(f'Liquid fraction, left wall at $T={T_H}K$, $t={np.int(t/Nt*Time)}s$')
-        # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
-        #
-        # plt.figure(t+1)
-        # plt.clf()
-        # plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
-        # plt.xlabel('$x$ (# lattice nodes)')
-        # plt.ylabel('$y$ (# lattice nodes)')
-        # plt.title(f'$u_y$ in square cavity with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=3)}s$')
-        # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
-        #
-        # plt.figure(t)
-        # plt.clf()
-        # plt.imshow(Cu*ux.T, cmap=cm.Blues, origin='lower')
-        # plt.xlabel('$x$ (# lattice nodes)')
-        # plt.ylabel('$y$ (# lattice nodes)')
-        # plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=3)}s$')
-        # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
-
-        plt.figure(t+2)
-        plt.clf()
-        plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
+        plt.figure()
+        plt.imshow(f_l.T, cmap=cm.Blues, origin='lower', aspect=1.0)
         plt.xlabel('$x$ (# lattice nodes)')
         plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$')
+        plt.title(f'Liquid fraction, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_rho_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_time{Time}_t={np.round(t/Nt*Time, decimals=3)}_test.png")
 
-        easy_view(t, uy)
-        easy_view(t, f_l)
+        plt.figure()
+        plt.clf()
+        plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'$u_y$ in square cavity with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_time{Time}_t={np.round(t/Nt*Time, decimals=3)}_test.png")
 
-    # if t > 300:
-    # easy_view(t, f_l)
-    # easy_view(t, T_dim / beta + T0)
+        plt.figure()
+        plt.clf()
+        plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$ \n Constant $\\rho$ in solid')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_time{Time}_t={np.round(t/Nt*Time, decimals=3)}_test.png")
+
+        # plt.figure(t+2)
+        # plt.clf()
+        # plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
+        # plt.xlabel('$x$ (# lattice nodes)')
+        # plt.ylabel('$y$ (# lattice nodes)')
+        # plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$')
+        # plt.colorbar()
+        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_rho_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
+
+        plt.close('all')
+
+        # easy_view('uy', uy)
+        # easy_view('ux', ux)
+        # easy_view('B', B)
 
 stop = time.time()
 print(stop-start)
-
 
 r = np.linspace(-Ny/2, Ny/2, num=Ny)
 r[0] = r[0] + (r[1] - r[0]) / 2

@@ -100,7 +100,7 @@ def easy_view(nr, arr):
 
 @jit
 def fluid(Nx, Ny, f_i, f_star):
-    for i in range(1, Nx-1):        # Streaming in the
+    for i in range(1, Nx-1):                # Streaming in all nodes expect ones nearest to the wall
         f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
         f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
         f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
@@ -114,7 +114,7 @@ def fluid(Nx, Ny, f_i, f_star):
     return f_i
 
 @jit
-def left_wall(Ny, f_i, f_star):
+def left_wall(Ny, f_i, f_star):             # Streaming in nodes touching left wall (half-way bounce-back)
     i = 0
 
     f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
@@ -130,7 +130,7 @@ def left_wall(Ny, f_i, f_star):
     return f_i
 
 @jit
-def right_wall(Nx, Ny, f_i, f_star):
+def right_wall(Nx, Ny, f_i, f_star):        # Streaming in nodes touching right wall (half-way bounce-back)
     i = Nx - 1
 
     f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
@@ -146,7 +146,7 @@ def right_wall(Nx, Ny, f_i, f_star):
     return f_i
 
 @jit
-def lower_wall(Nx, f_i, f_star):
+def lower_wall(Nx, f_i, f_star):            # Streaming in nodes touching lower wall (half-way bounce-back)
     j = 0
 
     f_i[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
@@ -162,7 +162,7 @@ def lower_wall(Nx, f_i, f_star):
     return f_i
 
 @jit
-def upper_wall(Nx, Ny, f_i, f_star):
+def upper_wall(Nx, Ny, f_i, f_star):        # Streaming in nodes touching upper wall (half-way bounce-back)
     j = Ny - 1
 
     f_i[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
@@ -178,7 +178,7 @@ def upper_wall(Nx, Ny, f_i, f_star):
     return f_i
 
 @jit
-def lower_left_corner(f_i, f_star):
+def lower_left_corner(f_i, f_star):         # Streaming in node lower left corner (half-way bounce-back)
     i = 0
     j = 0
 
@@ -195,7 +195,7 @@ def lower_left_corner(f_i, f_star):
     return f_i
 
 @jit
-def lower_right_corner(Nx, f_i, f_star):
+def lower_right_corner(Nx, f_i, f_star):    # Streaming in node lower right corner (half-way bounce-back)
     i = Nx - 1
     j = 0
 
@@ -212,7 +212,7 @@ def lower_right_corner(Nx, f_i, f_star):
     return f_i
 
 @jit
-def upper_left_corner(f_i, f_star):
+def upper_left_corner(f_i, f_star):         # Streaming in node upper left corner (half-way bounce-back)
     i = 0
     j = Ny - 1
 
@@ -229,7 +229,7 @@ def upper_left_corner(f_i, f_star):
     return f_i
 
 @jit
-def upper_right_corner(f_i, f_star):
+def upper_right_corner(f_i, f_star):        # Streaming in node upper right corner (half-way bounce-back)
     i = Nx - 1
     j = Ny - 1
 
@@ -245,7 +245,7 @@ def upper_right_corner(f_i, f_star):
 
     return f_i
 
-def streaming(Nx, Ny, f_i, f_star):
+def streaming(Nx, Ny, f_i, f_star):         # Function to access all streaming functions
     f_i = fluid(Nx, Ny, f_i, f_star)
     f_i = left_wall(Ny, f_i, f_star)
     f_i = right_wall(Nx, Ny, f_i, f_star)
@@ -260,19 +260,19 @@ def streaming(Nx, Ny, f_i, f_star):
 
 @jit
 def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
-    f_eq_plus = np.zeros((Nx, Ny, q))
+    f_eq_plus = np.zeros((Nx, Ny, q))                                   # Initialize even and odd parts of f_eq
     f_eq_minus = np.zeros((Nx, Ny, q))
 
-    u_dot_u = ux**2 + uy**2
+    u_dot_u = ux**2 + uy**2                                             # Inner product of u with itself
 
-    for i in range(q):
-        if i == 0:
-            u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
+    for i in range(q):                                                  # Loop over all directions of Q
+        if i == 0:                                                      # If-statement for symmetry arguments
+            u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]                   # Inner product of u with c_i
             f_eq_plus[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :] / c_s**2) + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
         elif i in [1, 2, 5, 6]:
             u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
-            f_eq_plus[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
-            f_eq_minus[:, :, i] = w_i[i] * rho * (u_dot_c[:, :] / c_s**2)
+            f_eq_plus[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))      # Even part of f_eq
+            f_eq_minus[:, :, i] = w_i[i] * rho * (u_dot_c[:, :] / c_s**2)                                               # Odd part of f_eq
         else:
             f_eq_plus[:, :, i] = f_eq_plus[:, :, c_opp[i]]
             f_eq_minus[:, :, i] = -f_eq_minus[:, :, c_opp[i]]
@@ -281,23 +281,23 @@ def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
 
 @jit
 def force_source(w_i, c_i, c_s, tau_plus, F):
-    Fi = np.zeros((Nx, Ny, q))
+    Fi = np.zeros((Nx, Ny, q))                                              # Initialize forcing and source terms
     Si = np.zeros((Nx, Ny, q))
 
-    u_dot_F = ux * F[:, :, 0] + uy * F[:, :, 1]
+    u_dot_F = ux * F[:, :, 0] + uy * F[:, :, 1]                             # Inner product of u with F
 
     for i in range(q):
-        u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
+        u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]                           # Inner product of u with c_i
 
-        Fi[:, :, i] = F[:, :, 0] * c_i[i, 0] + F[:, :, 1] * c_i[i, 1]
-        Si[:, :, i] = (tau_plus - 1/2) * w_i[i] * (u_dot_c[:, :] * Fi[:, :, i] / c_s**2 - u_dot_F) + (tau_minus - 1/2) * w_i[i] * Fi[:, :, i]
+        Fi[:, :, i] = F[:, :, 0] * c_i[i, 0] + F[:, :, 1] * c_i[i, 1]       # Inner product of F with c_i
+        Si[:, :, i] = (tau_plus - 1/2) * w_i[i] * (u_dot_c[:, :] * Fi[:, :, i] / c_s**2 - u_dot_F) + (tau_minus - 1/2) * w_i[i] * Fi[:, :, i]   # Source term
 
     return Si
 
 @jit
 def decompose_f_i(q, f_plus, f_minus, f_i):
-    for i in range(q):
-        if i == 0:
+    for i in range(q):                  # Decompose f_i for every direction
+        if i == 0:                      # If-statement for symmetry arguments
             f_plus[:, :, i] = f_i[:, :, i]
             f_minus[:, :, i] = 0
         elif i in [1, 2, 5, 6]:
@@ -306,26 +306,6 @@ def decompose_f_i(q, f_plus, f_minus, f_i):
         else:
             f_plus[:, :, i] = f_plus[:, :, c_opp[i]]
             f_minus[:, :, i] = -f_minus[:, :, c_opp[i]]
-
-    # f_plus[:, :, 0] = f_i[:, :, 0]
-    # f_plus[:, :, 1] = (f_i[:, :, 1] + f_i[:, :, 3]) / 2
-    # f_plus[:, :, 2] = (f_i[:, :, 2] + f_i[:, :, 4]) / 2
-    # f_plus[:, :, 3] = f_plus[:, :, 1]
-    # f_plus[:, :, 4] = f_plus[:, :, 2]
-    # f_plus[:, :, 5] = (f_i[:, :, 5] + f_i[:, :, 7]) / 2
-    # f_plus[:, :, 6] = (f_i[:, :, 6] + f_i[:, :, 8]) / 2
-    # f_plus[:, :, 7] = f_plus[:, :, 5]
-    # f_plus[:, :, 8] = f_plus[:, :, 6]
-    #
-    # f_minus[:, :, 0] = 0
-    # f_minus[:, :, 1] = (f_i[:, :, 1] - f_i[:, :, 3]) / 2
-    # f_minus[:, :, 2] = (f_i[:, :, 2] - f_i[:, :, 4]) / 2
-    # f_minus[:, :, 3] = -f_minus[:, :, 1]
-    # f_minus[:, :, 4] = -f_minus[:, :, 2]
-    # f_minus[:, :, 5] = (f_i[:, :, 5] - f_i[:, :, 7]) / 2
-    # f_minus[:, :, 6] = (f_i[:, :, 6] - f_i[:, :, 8]) / 2
-    # f_minus[:, :, 7] = -f_minus[:, :, 5]
-    # f_minus[:, :, 8] = -f_minus[:, :, 6]
 
     return f_plus, f_minus
 
@@ -385,53 +365,51 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
     f_l[:, 0] = 3/2 * f_l[:, 1] - 1/2 * f_l[:, 2]
     f_l[:, -1] = 3/2 * f_l[:, -2] - 1/2 * f_l[:, -3]
 
-    # f_l = np.zeros((Nx, Ny))                # Liquid fraction
-    # f_l[0:10, :] = 1
-
     return T_new, f_l
 
 
 # Buoyancy force
-F_buoy = - T_dim[:, :, None] * g_sim * 0
+F_buoy = - T_dim[:, :, None] * g_sim
 
 # Initialize equilibrium function
 f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)
 f_i = f_plus + f_minus
 
-start = time.time()
+start = time.time()                 # Start timer
 
-f_star = np.zeros((Nx, Ny, q))
-# Nt = 10
+f_star = np.zeros((Nx, Ny, q))      # Initialize f_star
+
 for t in range(Nt):
     B = (1 - f_l) * (tau_plus - 1/2) / (f_l + tau_plus - 1/2)               # Viscosity-dependent solid fraction
 
     # Buoyancy force
-    if np.any(f_l[f_l == 1]):                                               # Check if at least one cell is fully liquid
-        T_dim_avg_l = np.mean(T_dim[f_l == 1])
-        F_buoy = - (T_dim[:, :, None] - T_dim_avg_l) * g_sim
+    if np.any(f_l[f_l == 1]):                                               # Check if at least one node is fully liquid
+        T_dim_avg_l = np.mean(T_dim[f_l == 1])                              # Take average of all liquid nodes
+        F_buoy = - (T_dim[:, :, None] - T_dim_avg_l) * g_sim                # Calculate buoyancy force
     else:
-        F_buoy = - T_dim[:, :, None] * g_sim
+        T_dim_avg_l = np.mean(T_dim[f_l > 0])                               # Take average of all nodes containing liquid
+        F_buoy = - T_dim[:, :, None] * g_sim                                # Calculate buoyancy force
 
     # Calculate macroscopic quantities
-    rho_sim = np.sum(f_plus, axis=2)
+    rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
 
-    ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0]
-    uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1]
+    ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0]  # Calculate x velocity (odd parts due to symmetry)
+    uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1]  # Calculate y velocity (odd parts due to symmetry)
 
-    ux[B == 1] = 0
+    ux[B == 1] = 0      # Force velocity in solid to zero
     uy[B == 1] = 0
 
-    # Temperature
+    # Calculate temperature and liquid fraction
     T_dim, f_l = temperature(T_dim, alpha_sim, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l)
 
-    # New equilibrium distribution
+    # Calculate new equilibrium distribution
     f_eq_plus, f_eq_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)
 
     # Collision step
-    Si = force_source(w_i, c_i, c_s, tau_plus, F_buoy)
-    Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)
-    f_star = f_plus + f_minus + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_plus + f_minus) + (1-Bi) * Si
-    # f_star = f_plus * (1 - (1-Bi) / tau_plus) + f_minus * (1 - 2*Bi - (1-Bi) / tau_minus) + f_eq_plus * (1-Bi) / tau_plus + f_eq_minus * (1-Bi) / tau_minus + Si * (1-Bi)
+    Si = force_source(w_i, c_i, c_s, tau_plus, F_buoy)          # Calculate source term
+    Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)              # Repeat B in all directions to make next calc possible
+    # f_star = f_plus + f_minus + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_plus + f_minus) + (1-Bi) * Si
+    f_star = f_plus * (1 - (1-Bi) / tau_plus) + f_minus * (1 - 2*Bi - (1-Bi) / tau_minus) + f_eq_plus * (1-Bi) / tau_plus + f_eq_minus * (1-Bi) / tau_minus + Si * (1-Bi)
 
     # Streaming step
     f_i = streaming(Nx, Ny, f_i, f_star)

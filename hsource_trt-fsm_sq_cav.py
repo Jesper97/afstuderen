@@ -23,6 +23,7 @@ beta = 210e-6       # Thermal expansion (1/K)
 Lat = 334e3         # Latent heat (J/kg)
 c_p = 4.2e3         # Specific heat (J/(kgK))
 Tm = 273.15         # Melting point (K)
+epsilon = 0.5       # Width mushy zone (K)
 h_s = c_p * Tm      # Specific enthalpy of solid (J/kg)
 h_l = h_s + Lat     # Specific enthalpy of liquid (J/kg)
 
@@ -41,7 +42,7 @@ Ma = 0.1                                            # Mach number
 Lambda = 1/4        # Magic parameter
 tau_plus = 1        # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Ny = 20             # Nodes in y-direction
+Ny = 10             # Nodes in y-direction
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -88,6 +89,7 @@ uy = np.zeros(dim)                 # Simulation velocity in y direction
 rho_sim = rho0_sim * np.ones(dim)  # Simulation density
 T_dim = np.zeros((Nx+2, Ny+2))     # Dimensionless simulation temperature
 f_l = np.zeros(dim)                # Liquid fraction
+f_l_t_1 = np.zeros(dim)            # Liquid fraction one time step before
 
 # Temperature BCS
 T_dim_H = np.ones(Ny+2) * beta * (T_H - T0)
@@ -311,39 +313,59 @@ def decompose_f_i(q, f_plus, f_minus, f_i):
     return f_plus, f_minus
 
 
-def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
+def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_t_1, f_l_t_2):
     T_new = np.zeros((Nx+2, Ny+2))
-    f_l = f_l_old_tstep.copy()
+    f_l = f_l_t_1.copy()
 
-    def liq_fraction(T_new, f_l):
-        h = c_p * (T_new / beta + T0) + Lat * f_l
+    Tm_sim = beta * (Tm - T0)
+    epsilon_sim = epsilon * beta
 
-        if h < h_s:
-            f_l = 0
-        elif h > h_l:
-            f_l = 1
-        else:
-            f_l = (h - h_s) / (h_l - h_s)
+    def energy_eq(i, j, T, ux, uy, f_l_old_iter, f_l_old_time):
+        T_cell = (1 - 6 * alpha) * T[i, j] + (2 * alpha - ux[i-1, j-1]) * T[i+1, j] \
+                      + (2 * alpha + ux[i-1, j-1]) * T[i-1, j] + (2 * alpha - uy[i-1, j-1]) * T[i, j+1] \
+                      + (2 * alpha + uy[i-1, j-1]) * T[i, j-1] + (ux[i-1, j-1] / 4 + uy[i-1, j-1] / 4 - alpha / 2) * T[i+1, j+1] \
+                      + (-ux[i-1, j-1] / 4 + uy[i-1, j-1] / 4 - alpha / 2) * T[i-1, j+1] + (ux[i-1, j-1] / 4 - uy[i-1, j-1] / 4 - alpha / 2) * T[i+1, j-1] \
+                      + (-ux[i-1, j-1] / 4 - uy[i-1, j-1] / 4 - alpha / 2) * T[i-1, j-1] - beta * Lat / c_p * (f_l_old_iter - f_l_old_time)
 
-        return f_l
+        return T_cell
 
     for j in range(1, Ny+1):
         for i in range(1, Nx+1):
-            f_l_old_iter = -10
+            f_l_old_iter = f_l_t_1[i-1, j-1].copy()
+            f_l_old_time = f_l_t_2[i-1, j-1].copy()
 
-            while True:
-                T_new[i, j] = (1 - 6 * alpha) * T[i, j] + (2 * alpha - ux[i-1, j-1]) * T[i+1, j] \
-                              + (2 * alpha + ux[i-1, j-1]) * T[i-1, j] + (2 * alpha - uy[i-1, j-1]) * T[i, j+1] \
-                              + (2 * alpha + uy[i-1, j-1]) * T[i, j-1] + (ux[i-1, j-1] / 4 + uy[i-1, j-1] / 4 - alpha / 2) * T[i+1, j+1] \
-                              + (-ux[i-1, j-1] / 4 + uy[i-1, j-1] / 4 - alpha / 2) * T[i-1, j+1] + (ux[i-1, j-1] / 4 - uy[i-1, j-1] / 4 - alpha / 2) * T[i+1, j-1] \
-                              + (-ux[i-1, j-1] / 4 - uy[i-1, j-1] / 4 - alpha / 2) * T[i-1, j-1] - beta * Lat / c_p * (f_l[i-1, j-1] - f_l_old_tstep[i-1, j-1])
+            T_new[i, j] = energy_eq(i, j, T, ux, uy, f_l_old_iter, f_l_old_time)
 
-                f_l[i-1, j-1] = liq_fraction(T_new[i, j], f_l[i-1, j-1])
+            if T_new[i, j] < (Tm_sim-epsilon_sim):
+                f_l[i-1, j-1] = 0
+            elif T_new[i, j] > (Tm_sim+epsilon_sim):
+                f_l[i-1, j-1] = 1
+            else:
+                x = 0
+                while True:
+                    x += 1
+                    T_new[i, j] = energy_eq(i, j, T, ux, uy, f_l_old_iter, f_l_old_time)
 
-                if np.abs(f_l[i-1, j-1] - f_l_old_iter) < 1e-6:
-                    break
+                    # T_prime = Tm - epsilon + 2 * epsilon * f_l_t_1[i-1, j-1]
+                    T_prime = Tm - epsilon + 2 * epsilon * f_l_old_iter
+                    T_new_phys = T_new[i, j] / beta + T0
 
-                f_l_old_iter = f_l[i-1, j-1].copy()
+                    f_l[i-1, j-1] = f_l_old_iter + 0.1 * c_p / Lat * (T_new_phys - T_prime)
+
+                    # if t in [408, 409]:
+                    #     if (i == 1) and (j == 10):
+                    #         print(1, T_new)
+                    #         print(1, T_prime)
+                    #         print(1, T_new_phys)
+                    #         print(1, f_l)
+
+                    ########
+                    if np.abs(f_l[i-1, j-1] - f_l_old_iter) < 10: #e-9:
+                        # print(x)
+                        break
+
+                    f_l_old_time = f_l_t_1[i-1, j-1].copy()
+                    f_l_old_iter = f_l[i-1, j-1].copy()
 
     # Ghost nodes
     T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
@@ -352,9 +374,9 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
     T_new[0, :] = 16/15 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
 
     # easy_view(2, T_new / beta + T0)
-    # easy_view(3, f_l)
+    easy_view(t, f_l)
 
-    return T_new, f_l
+    return T_new, f_l, f_l_t_1
 
 
 # Buoyancy force
@@ -391,7 +413,7 @@ for t in range(Nt):
     uy[B == 1] = 0
 
     # Calculate temperature and liquid fraction
-    T_dim, f_l = temperature(T_dim, alpha_sim, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l)
+    T_dim, f_l, f_l_t_1 = temperature(T_dim, alpha_sim, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l, f_l_t_1)
 
     # Calculate new equilibrium distribution
     f_eq_plus, f_eq_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)
@@ -406,7 +428,7 @@ for t in range(Nt):
     f_i = streaming(Nx, Ny, f_i, f_star)
     f_plus, f_minus = decompose_f_i(q, f_plus, f_minus, f_i)
 
-    if (t % 6000 == 0):
+    if (t % 2500 == 0):
         T = T_dim / beta + T0
 
         # Liquid fraction

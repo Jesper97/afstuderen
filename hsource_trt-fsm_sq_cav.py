@@ -8,14 +8,14 @@ from numba import jit
 
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
-folder_nr = 'test'
+folder_nr = 'extrapol_T_BC'
 
 # Define constants
 # Physical parameters
 L = 0.002           # Length of cavity (m)
 H = L               # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
-Time = 3            # (s)
+Time = 100            # (s)
 nu = 1e-6           # Kinematic viscosity (m^2/s)
 alpha = 1.44e-7     # Thermal diffusivity (m^2/s)
 rho0 = 1e3          # Density (kg/m^3)
@@ -82,14 +82,15 @@ print('Nt', Nt)
 g_sim = g / Cg * np.array([0, -1])      # Simulation acceleration vector
 
 # Initial conditions
-ux = np.zeros((Nx, Ny))                 # Simulation velocity in x direction
-uy = np.zeros((Nx, Ny))                 # Simulation velocity in y direction
-rho_sim = rho0_sim * np.ones((Nx, Ny))  # Simulation density
-T_dim = np.zeros((Nx, Ny))              # Dimensionless simulation temperature
-f_l = np.zeros((Nx, Ny))                # Liquid fraction
+dim = (Nx, Ny)
+ux = np.zeros(dim)                 # Simulation velocity in x direction
+uy = np.zeros(dim)                 # Simulation velocity in y direction
+rho_sim = rho0_sim * np.ones(dim)  # Simulation density
+T_dim = np.zeros((Nx+2, Ny+2))     # Dimensionless simulation temperature
+f_l = np.zeros(dim)                # Liquid fraction
 
 # Temperature BCS
-T_dim_H = np.ones(Ny) * beta * (T_H - T0)
+T_dim_H = np.ones(Ny+2) * beta * (T_H - T0)
 
 def easy_view(nr, arr):
     idx = ["idx" for i in arr[1, :]]
@@ -311,7 +312,7 @@ def decompose_f_i(q, f_plus, f_minus, f_i):
 
 
 def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
-    T_new = np.zeros((Nx, Ny))
+    T_new = np.zeros((Nx+2, Ny+2))
     f_l = f_l_old_tstep.copy()
 
     def liq_fraction(T_new, f_l):
@@ -326,50 +327,38 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_old_tstep):
 
         return f_l
 
-    for j in range(1, Ny-1):
-        for i in range(1, Nx-1):
+    for j in range(1, Ny+1):
+        for i in range(1, Nx+1):
             f_l_old_iter = -10
 
             while True:
-                T_new[i, j] = (1 - 6 * alpha) * T[i, j] + (2 * alpha - ux[i, j]) * T[i+1, j] \
-                              + (2 * alpha + ux[i, j]) * T[i-1, j] + (2 * alpha - uy[i, j]) * T[i, j+1] \
-                              + (2 * alpha + uy[i, j]) * T[i, j-1] + (ux[i, j] / 4 + uy[i, j] / 4 - alpha / 2) * T[i+1, j+1] \
-                              + (-ux[i, j] / 4 + uy[i, j] / 4 - alpha / 2) * T[i-1, j+1] + (ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i+1, j-1] \
-                              + (-ux[i, j] / 4 - uy[i, j] / 4 - alpha / 2) * T[i-1, j-1] - beta * Lat / c_p * (f_l[i, j] - f_l_old_tstep[i, j])
+                T_new[i, j] = (1 - 6 * alpha) * T[i, j] + (2 * alpha - ux[i-1, j-1]) * T[i+1, j] \
+                              + (2 * alpha + ux[i-1, j-1]) * T[i-1, j] + (2 * alpha - uy[i-1, j-1]) * T[i, j+1] \
+                              + (2 * alpha + uy[i-1, j-1]) * T[i, j-1] + (ux[i-1, j-1] / 4 + uy[i-1, j-1] / 4 - alpha / 2) * T[i+1, j+1] \
+                              + (-ux[i-1, j-1] / 4 + uy[i-1, j-1] / 4 - alpha / 2) * T[i-1, j+1] + (ux[i-1, j-1] / 4 - uy[i-1, j-1] / 4 - alpha / 2) * T[i+1, j-1] \
+                              + (-ux[i-1, j-1] / 4 - uy[i-1, j-1] / 4 - alpha / 2) * T[i-1, j-1] - beta * Lat / c_p * (f_l[i-1, j-1] - f_l_old_tstep[i-1, j-1])
 
-                f_l[i, j] = liq_fraction(T_new[i, j], f_l[i, j])
+                f_l[i-1, j-1] = liq_fraction(T_new[i, j], f_l[i-1, j-1])
 
-                if np.abs(f_l[i, j] - f_l_old_iter) < 1e-6:
+                if np.abs(f_l[i-1, j-1] - f_l_old_iter) < 1e-6:
                     break
 
-                f_l_old_iter = f_l[i, j].copy()
+                f_l_old_iter = f_l[i-1, j-1].copy()
 
-    # Imposed temperature BCs
-    for j in range(1, Ny-1):
-        f_l_old_iter = -10
-        while True:
-            T_new[0, j] = 8/15 * T_dim_H[j] + 2/3 * T_new[1, j] - 1/5 * T_new[2, j] - beta * Lat / c_p * (f_l[0, j] - f_l_old_tstep[0, j])
-            f_l[0, j] = liq_fraction(T_new[0, j], f_l[0, j])
+    # Ghost nodes
+    T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
+    T_new[1:-1, -1] = 21/23 * T_new[1:-1, -2] + 3/23 * T_new[1:-1, -3] - 1/23 * T_new[1:-1, -4]     # Neumann extrapolation on upper boundary
+    T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]                 # Neumann extrapolation on right boundary
+    T_new[0, :] = 16/15 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
 
-            if np.abs(f_l[0, j] - f_l_old_iter) < 1e-3:
-                break
-
-            f_l_old_iter = f_l[0, j]
-
-    # Adiabatic BCs
-    T_new[-1, :] = 3/2 * T_new[-2, :] - 1/2 * T_new[-3, :]      # Extrapolate boundary temperature
-    T_new[:, 0] = 3/2 * T_new[:, 1] - 1/2 * T_new[:, 2]
-    T_new[:, -1] = 3/2 * T_new[:, -2] - 1/2 * T_new[:, -3]
-
-    f_l[-1, :] = 3/2 * f_l[-2, :] - 1/2 * f_l[-3, :]            # Extrapolate boundary liquid fraction
-    f_l[:, 0] = 3/2 * f_l[:, 1] - 1/2 * f_l[:, 2]
-    f_l[:, -1] = 3/2 * f_l[:, -2] - 1/2 * f_l[:, -3]
+    # easy_view(2, T_new / beta + T0)
+    # easy_view(3, f_l)
 
     return T_new, f_l
 
 
 # Buoyancy force
-F_buoy = - T_dim[:, :, None] * g_sim
+F_buoy = - T_dim[1:-1, 1:-1, None] * g_sim
 
 # Initialize equilibrium function
 f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)
@@ -383,12 +372,14 @@ for t in range(Nt):
     B = (1 - f_l) * (tau_plus - 1/2) / (f_l + tau_plus - 1/2)               # Viscosity-dependent solid fraction
 
     # Buoyancy force
+    T_dim_phys = T_dim[1:-1, 1:-1]                                          # Select only physical domain w/out ghost nodes
+
     if np.any(f_l[f_l == 1]):                                               # Check if at least one node is fully liquid
-        T_dim_avg_l = np.mean(T_dim[f_l == 1])                              # Take average of all liquid nodes
-        F_buoy = - (T_dim[:, :, None] - T_dim_avg_l) * g_sim                # Calculate buoyancy force
+        T_dim_avg_l = np.mean(T_dim_phys[f_l == 1])                              # Take average of all liquid nodes
+        F_buoy = - (T_dim[1:-1, 1:-1, None] - T_dim_avg_l) * g_sim                # Calculate buoyancy force
     else:
-        T_dim_avg_l = np.mean(T_dim[f_l > 0])                               # Take average of all nodes containing liquid
-        F_buoy = - T_dim[:, :, None] * g_sim                                # Calculate buoyancy force
+        T_dim_avg_l = np.mean(T_dim_phys[f_l > 0])                               # Take average of all nodes containing liquid
+        F_buoy = - T_dim[1:-1, 1:-1, None] * g_sim                                # Calculate buoyancy force
 
     # Calculate macroscopic quantities
     rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
@@ -415,33 +406,46 @@ for t in range(Nt):
     f_i = streaming(Nx, Ny, f_i, f_star)
     f_plus, f_minus = decompose_f_i(q, f_plus, f_minus, f_i)
 
-    if (t % 250 == 0):
-        # Heatmaps
+    if (t % 6000 == 0):
+        T = T_dim / beta + T0
+
+        # Liquid fraction
         plt.figure()
         plt.imshow(f_l.T, cmap=cm.Blues, origin='lower', aspect=1.0)
         plt.xlabel('$x$ (# lattice nodes)')
         plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'Liquid fraction, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.title(f'$f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$ \n Extrapolated BCs')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_time{Time}_t={np.round(t/Nt*Time, decimals=3)}_test.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_test.png")
 
+        # Velocities
         plt.figure()
         plt.clf()
         plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
         plt.xlabel('$x$ (# lattice nodes)')
         plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'$u_y$ in square cavity with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.title(f'$u_y$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$ \n Extrapolated BCs')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_time{Time}_t={np.round(t/Nt*Time, decimals=3)}_test.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_test.png")
 
         plt.figure()
         plt.clf()
         plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
         plt.xlabel('$x$ (# lattice nodes)')
         plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$ \n Constant $\\rho$ in solid')
+        plt.title(f'$u_x$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$ \n Extrapolated BCs')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_time{Time}_t={np.round(t/Nt*Time, decimals=3)}_test.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_test.png")
+
+        ## Temperature heatmap
+        plt.figure()
+        plt.clf()
+        plt.imshow(np.flip(T[1:-1, 1:-1].T, axis=0), cmap=cm.Blues)
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'$T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$ \n Extrapolated BCs')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_test.png")
 
         # plt.figure(t+2)
         # plt.clf()

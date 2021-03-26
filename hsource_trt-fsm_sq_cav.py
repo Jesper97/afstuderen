@@ -23,7 +23,7 @@ beta = 210e-6       # Thermal expansion (1/K)
 Lat = 334e3         # Latent heat (J/kg)
 c_p = 4.2e3         # Specific heat (J/(kgK))
 Tm = 273.15         # Melting point (K)
-epsilon = 0.5       # Width mushy zone (K)
+epsilon = 0.1       # Width mushy zone (K)
 h_s = c_p * Tm      # Specific enthalpy of solid (J/kg)
 h_l = h_s + Lat     # Specific enthalpy of liquid (J/kg)
 
@@ -42,7 +42,7 @@ Ma = 0.1                                            # Mach number
 Lambda = 1/4        # Magic parameter
 tau_plus = 1        # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Ny = 10             # Nodes in y-direction
+Ny = 20             # Nodes in y-direction
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -352,15 +352,7 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_t_1, f_l_t_2):
 
                     f_l[i-1, j-1] = f_l_old_iter + 0.1 * c_p / Lat * (T_new_phys - T_prime)
 
-                    # if t in [408, 409]:
-                    #     if (i == 1) and (j == 10):
-                    #         print(1, T_new)
-                    #         print(1, T_prime)
-                    #         print(1, T_new_phys)
-                    #         print(1, f_l)
-
-                    ########
-                    if np.abs(f_l[i-1, j-1] - f_l_old_iter) < 10: #e-9:
+                    if np.abs(f_l[i-1, j-1] - f_l_old_iter) < 1e-9:
                         # print(x)
                         break
 
@@ -373,8 +365,9 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l_t_1, f_l_t_2):
     T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]                 # Neumann extrapolation on right boundary
     T_new[0, :] = 16/15 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
 
-    # easy_view(2, T_new / beta + T0)
-    easy_view(t, f_l)
+    if (t % 2500 == 0):
+        easy_view(t, T_new / beta + T0)
+        easy_view(t, f_l)
 
     return T_new, f_l, f_l_t_1
 
@@ -409,8 +402,8 @@ for t in range(Nt):
     ux = np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0]  # Calculate x velocity (odd parts due to symmetry)
     uy = np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1]  # Calculate y velocity (odd parts due to symmetry)
 
-    ux[B == 1] = 0      # Force velocity in solid to zero
-    uy[B == 1] = 0
+    ux[np.round(B) == 1] = 0      # Force velocity in solid to zero
+    uy[np.round(B) == 1] = 0
 
     # Calculate temperature and liquid fraction
     T_dim, f_l, f_l_t_1 = temperature(T_dim, alpha_sim, Lat, c_p, beta, ux, uy, t, T_dim_H, f_l, f_l_t_1)
@@ -428,7 +421,7 @@ for t in range(Nt):
     f_i = streaming(Nx, Ny, f_i, f_star)
     f_plus, f_minus = decompose_f_i(q, f_plus, f_minus, f_i)
 
-    if (t % 2500 == 0):
+    if (t % 9999 == 0):
         T = T_dim / beta + T0
 
         # Liquid fraction

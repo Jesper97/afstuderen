@@ -8,50 +8,50 @@ from numba import njit
 
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
-folder_nr = 'gallium_Hsource'
+folder_nr = 'water_Hsource'
 
 # Define constants
-# # Physical parameters water
-# L = 0.1             # Length of cavity (m)
-# H = L               # Height of cavity (m)
-# g = 9.81            # Gravitational acceleration (m/s^2)
-# Time = 2000         # (s)
-# nu = 1e-6           # Kinematic viscosity (m^2/s)
-# alpha = 1.44e-7     # Thermal diffusivity (m^2/s)
-# rho0 = 1e3          # Density (kg/m^3)
-# beta = 210e-6       # Thermal expansion (1/K)
-# Lat = 334e3         # Latent heat (J/kg)
-# c_p = 4.2e3         # Specific heat (J/(kgK))
-# Tm = 273.15         # Melting point (K)
-#
-# # Domain parameters
-# T0 = 272          # Starting temperature (K)
-# T_H = 280         # Hot wall temperature (K)
-# T_C = 272         # Hot wall temperature (K)
-# epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
-# umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
-
-# Physical parameters gallium
-Time = 2000          # (s)
+# Physical parameters water
 L = 0.1             # Length of cavity (m)
-H = 0.714*L         # Height of cavity (m)
+H = L               # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
+Time = 2000          # (s)
+nu = 1e-6           # Kinematic viscosity (m^2/s)
+alpha = 1.44e-7     # Thermal diffusivity (m^2/s)
 rho0 = 1e3          # Density (kg/m^3)
-lbda = 33           # Thermal conductivity
-mu = 1.81e-3        # Dynamic viscosity (Ns/m^2)
-nu = mu/rho0        # Kinematic viscosity (m^2/s)
-beta = 1.2e-4       # Thermal expansion (1/K)
-Lat = 8.016e5       # Latent heat (J/kg)
-c_p = 381           # Specific heat (J/(kgK))
-alpha = lbda / (rho0 * c_p)     # Thermal diffusivity (m^2/s)
-Tm = 302.8          # Melting point (K)
+beta = 210e-6       # Thermal expansion (1/K)
+Lat = 334e3         # Latent heat (J/kg)
+c_p = 4.2e3         # Specific heat (J/(kgK))
+Tm = 273.15         # Melting point (K)
 
 # Domain parameters
-T0 = 301.3          # Starting temperature (K)
-T_H = 311           # Hot wall temperature (K)
-T_C = 301.3         # Hot wall temperature (K)
+T0 = 272          # Starting temperature (K)
+T_H = 280         # Hot wall temperature (K)
+T_C = 272         # Hot wall temperature (K)
 epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
+
+# # Physical parameters gallium
+# Time = 200          # (s)
+# L = 0.1             # Length of cavity (m)
+# H = 0.714*L         # Height of cavity (m)
+# g = 9.81            # Gravitational acceleration (m/s^2)
+# rho0 = 1e3          # Density (kg/m^3)
+# lbda = 33           # Thermal conductivity
+# mu = 1.81e-3        # Dynamic viscosity (Ns/m^2)
+# nu = mu/rho0        # Kinematic viscosity (m^2/s)
+# beta = 1.2e-4       # Thermal expansion (1/K)
+# Lat = 8.016e5       # Latent heat (J/kg)
+# c_p = 381           # Specific heat (J/(kgK))
+# alpha = lbda / (rho0 * c_p)     # Thermal diffusivity (m^2/s)
+# Tm = 302.8          # Melting point (K)
+#
+# # Domain parameters
+# T0 = 301.3          # Starting temperature (K)
+# T_H = 311           # Hot wall temperature (K)
+# T_C = 301.3         # Hot wall temperature (K)
+# epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
+# umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Dimensionless numbers
 Re = umax * H / nu                                  # Reynolds number
@@ -62,9 +62,9 @@ Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.505     # Even relaxation time
+tau_plus = 0.51     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Ny = 10             # Nodes in y-direction
+Ny = 20             # Nodes in y-direction
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -83,7 +83,7 @@ if alpha_sim > 1/6:
 
 # Calculate conversion parameters
 dx = H / Ny                                             # Distance
-dt = (c_s**2) * (tau_plus - 1 / 2) * ((dx**2) / nu)       # Time
+dt = (c_s ** 2) * (tau_plus - 1 / 2) * ((dx ** 2) / nu)       # Time
 Cu = dx / dt                                            # Velocity
 Cg = dx / dt**2                                         # Acceleration
 Crho = rho0 / rho0_sim                                  # Density
@@ -127,12 +127,6 @@ def easy_view(nr, arr):
 @njit
 def fluid(Nx, Ny, f_i, f_star):
     for i in range(1, Nx-1):                # Streaming in all nodes expect ones nearest to the wall
-        f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
-        f_pl
-
-
-
-
         f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
         f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
         f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
@@ -395,9 +389,10 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_C, T_dim_H, f_l_t_1, 
     T_new[0, :] = 16/15 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
     T_new[-1, :] = 16/15 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-    if (t>4290) and (t<4300):
-        easy_view(t, f_l)
-        easy_view(t, T_new / beta + T0)
+    # if (t % 2500 == 0):
+    # if t > 6350 and t < 6360:
+    #     easy_view(t, T_new / beta + T0)
+    #     easy_view(t, f_l)
 
     return T_new, f_l, f_l_t_1
 
@@ -412,9 +407,6 @@ f_i = f_plus + f_minus
 start = time.time()                 # Start timer
 
 f_star = np.zeros((Nx, Ny, q))      # Initialize f_star
-
-#####
-Nt = 4405
 
 for t in range(Nt):
     B = (1 - f_l) * (tau_plus - 1/2) / (f_l + tau_plus - 1/2)               # Viscosity-dependent solid fraction
@@ -446,7 +438,7 @@ for t in range(Nt):
     # Collision step
     Si = force_source(w_i, c_i, c_s, tau_plus, F_buoy)          # Calculate source term
     Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)              # Repeat B in all directions to make next calc possible
-
+    # f_star = f_plus + f_minus + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_plus + f_minus) + (1-Bi) * Si
     # if t > 1:
     #     easy_view(t, T)
     #     easy_view(t, f_plus[:, :, 1])
@@ -455,77 +447,76 @@ for t in range(Nt):
     #     easy_view(t, f_eq_plus[:, :, 1])
     #     easy_view(t, f_eq_minus[:, :, 1])
 
-    # f_star = f_plus + f_minus + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_plus + f_minus) + (1-Bi) * Si
     f_star = f_plus * (1 - (1-Bi) / tau_plus) + f_minus * (1 - 2*Bi - (1-Bi) / tau_minus) + f_eq_plus * (1-Bi) / tau_plus + f_eq_minus * (1-Bi) / tau_minus + Si * (1-Bi)
 
     # Streaming step
     f_i = streaming(Nx, Ny, f_i, f_star)
     f_plus, f_minus = decompose_f_i(q, f_plus, f_minus, f_i)
 
-    # if (t % 200 == 1):
-    #     T = T_dim / beta + T0
-    #
-    #     # Liquid fraction
-    #     plt.figure()
-    #     plt.imshow(f_l.T, cmap=cm.Blues, origin='lower', aspect=1.0)
-    #     plt.xlabel('$x$ (# lattice nodes)')
-    #     plt.ylabel('$y$ (# lattice nodes)')
-    #     plt.title(f'$f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    #     plt.colorbar()
-    #     plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}.png")
-    #
-    #     # # Velocities
-    #     # plt.figure()
-    #     # plt.clf()
-    #     # plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
-    #     # plt.xlabel('$x$ (# lattice nodes)')
-    #     # plt.ylabel('$y$ (# lattice nodes)')
-    #     # plt.title(f'$u_y$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    #     # plt.colorbar()
-    #     # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}.png")
-    #     #
-    #     # plt.figure()
-    #     # plt.clf()
-    #     # plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
-    #     # plt.xlabel('$x$ (# lattice nodes)')
-    #     # plt.ylabel('$y$ (# lattice nodes)')
-    #     # plt.title(f'$u_x$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    #     # plt.colorbar()
-    #     # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}.png")
-    #     #
-    #     # ## Temperature heatmap
-    #     # plt.figure()
-    #     # plt.clf()
-    #     # plt.imshow(np.flip(T[1:-1, 1:-1].T, axis=0), cmap=cm.Blues)
-    #     # plt.xlabel('$x$ (# lattice nodes)')
-    #     # plt.ylabel('$y$ (# lattice nodes)')
-    #     # plt.title(f'$T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    #     # plt.colorbar()
-    #     # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_test.png")
-    #
-    #     # plt.figure()
-    #     # plt.clf()
-    #     # plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
-    #     # plt.xlabel('$x$ (# lattice nodes)')
-    #     # plt.ylabel('$y$ (# lattice nodes)')
-    #     # plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$')
-    #     # plt.colorbar()
-    #     # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_rho_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
-    #
-    #     # # Vector plot
-    #     # plt.figure()
-    #     # plt.quiver(Cu*ux.T, Cu*uy.T)
-    #     # plt.xlabel('$x$ (# lattice nodes)')
-    #     # plt.ylabel('$y$ (# lattice nodes)')
-    #     # plt.title(f'$u$ in pipe with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    #     # # plt.legend('Velocity vector')
-    #     # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/arrowplot_time{Time}_test.png")
-    #
-    #     plt.close('all')
-    #
-    #     # easy_view('uy', uy)
-    #     # easy_view('ux', ux)
-    #     # easy_view('B', B)
+    if (t % 10000 == 1):
+        T = T_dim / beta + T0
+
+        # Liquid fraction
+        plt.figure()
+        plt.imshow(f_l.T, cmap=cm.Blues, origin='lower', aspect=1.0)
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'$f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}.png")
+
+        # Velocities
+        plt.figure()
+        plt.clf()
+        plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'$u_y$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}.png")
+
+        plt.figure()
+        plt.clf()
+        plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'$u_x$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}.png")
+
+        ## Temperature heatmap
+        plt.figure()
+        plt.clf()
+        plt.imshow(np.flip(T[1:-1, 1:-1].T, axis=0), cmap=cm.Blues)
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'$T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_test.png")
+
+        # plt.figure()
+        # plt.clf()
+        # plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
+        # plt.xlabel('$x$ (# lattice nodes)')
+        # plt.ylabel('$y$ (# lattice nodes)')
+        # plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$')
+        # plt.colorbar()
+        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_rho_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
+
+        # Vector plot
+        plt.figure()
+        plt.quiver(Cu*ux.T, Cu*uy.T)
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'$u$ in pipe with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        # plt.legend('Velocity vector')
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/arrowplot_time{Time}_test.png")
+
+        plt.close('all')
+
+        # easy_view('uy', uy)
+        # easy_view('ux', ux)
+        # easy_view('B', B)
 
 stop = time.time()
 print(stop-start)

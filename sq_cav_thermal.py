@@ -86,6 +86,9 @@ T_BC_lower = np.ones(Ny) * beta * (T_C - T0)
 @jit
 def fluid(Nx, Ny, f_i, f_star):
     for i in range(1, Nx-1):
+
+
+
         f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
         f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
         f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
@@ -332,14 +335,14 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
 # plt.legend('Velocity vector')
-plt.savefig("Figures/sq_cav_th/arrowplot_temp" + str(1) + ".png")
+plt.savefig("Figures/sq_cav_th/arrowplot_temp_test2.png")
 
 ## Heatmaps
 plt.figure(2)
 plt.clf()
 plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
 plt.colorbar()
-plt.savefig("Figures/sq_cav_th/heatmapx_temp" + str(1.1) + ".png")
+plt.savefig("Figures/sq_cav_th/heatmapx_temp_test2.png")
 # #
 # plt.figure(3)
 # plt.clf()

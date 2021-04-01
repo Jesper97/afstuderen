@@ -36,7 +36,7 @@ Ma = 0.1
 Lambda = 1/4
 tau_plus = 0.55
 rho0_sim = 1
-Ny = 20
+Ny = 50
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -93,172 +93,344 @@ def easy_view(nr, arr):
     print(nr, dataset)
 
 @jit
-def fluid(Nx, Ny, f_i, f_star):
+def fluid(Nx, Ny, f_plus, f_minus, f_star):
     for i in range(1, Nx-1):
-        f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
-        f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
-        f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
-        f_i[i, 1:Ny-1, 3] = f_star[i+1, 1:Ny-1, 3]
-        f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
-        f_i[i, 1:Ny-1, 5] = f_star[i-1, 0:Ny-2, 5]
-        f_i[i, 1:Ny-1, 6] = f_star[i+1, 0:Ny-2, 6]
-        f_i[i, 1:Ny-1, 7] = f_star[i+1, 2:Ny, 7]
-        f_i[i, 1:Ny-1, 8] = f_star[i-1, 2:Ny, 8]
+        f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+        f_plus[i, 1:Ny-1, 1] = (f_star[i-1, 1:Ny-1, 1] + f_star[i+1, 1:Ny-1, 3]) / 2
+        f_plus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] + f_star[i, 2:Ny, 4]) / 2
+        f_plus[i, 1:Ny-1, 3] = f_plus[i, 1:Ny-1, 1]
+        f_plus[i, 1:Ny-1, 4] = f_plus[i, 1:Ny-1, 2]
+        f_plus[i, 1:Ny-1, 5] = (f_star[i-1, 0:Ny-2, 5] + f_star[i+1, 2:Ny, 7]) / 2
+        f_plus[i, 1:Ny-1, 6] = (f_star[i+1, 0:Ny-2, 6] + f_star[i-1, 2:Ny, 8]) / 2
+        f_plus[i, 1:Ny-1, 7] = f_plus[i, 1:Ny-1, 5]
+        f_plus[i, 1:Ny-1, 8] = f_plus[i, 1:Ny-1, 6]
 
-    return f_i
+        f_minus[i, 1:Ny-1, 0] = 0
+        f_minus[i, 1:Ny-1, 1] = (f_star[i-1, 1:Ny-1, 1] - f_star[i+1, 1:Ny-1, 3]) / 2
+        f_minus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] - f_star[i, 2:Ny, 4]) / 2
+        f_minus[i, 1:Ny-1, 3] = -f_minus[i, 1:Ny-1, 1]
+        f_minus[i, 1:Ny-1, 4] = -f_minus[i, 1:Ny-1, 2]
+        f_minus[i, 1:Ny-1, 5] = (f_star[i-1, 0:Ny-2, 5] - f_star[i+1, 2:Ny, 7]) / 2
+        f_minus[i, 1:Ny-1, 6] = (f_star[i+1, 0:Ny-2, 6] - f_star[i-1, 2:Ny, 8]) / 2
+        f_minus[i, 1:Ny-1, 7] = -f_minus[i, 1:Ny-1, 5]
+        f_minus[i, 1:Ny-1, 8] = -f_minus[i, 1:Ny-1, 6]
+
+        # f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+        # f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
+        # f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
+        # f_i[i, 1:Ny-1, 3] = f_star[i+1, 1:Ny-1, 3]
+        # f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
+        # f_i[i, 1:Ny-1, 5] = f_star[i-1, 0:Ny-2, 5]
+        # f_i[i, 1:Ny-1, 6] = f_star[i+1, 0:Ny-2, 6]
+        # f_i[i, 1:Ny-1, 7] = f_star[i+1, 2:Ny, 7]
+        # f_i[i, 1:Ny-1, 8] = f_star[i-1, 2:Ny, 8]
+
+    return f_plus, f_minus
 
 @jit
-def left_wall(Ny, f_i, f_star):
+def left_wall(Ny, f_plus, f_minus, f_star):
     i = 0
 
-    f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
-    f_i[i, 1:Ny-1, 1] = f_star[i, 1:Ny-1, 3]        # Bounce
-    f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
-    f_i[i, 1:Ny-1, 3] = f_star[i+1, 1:Ny-1, 3]
-    f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
-    f_i[i, 1:Ny-1, 5] = f_star[i, 1:Ny-1, 7]        # Bounce
-    f_i[i, 1:Ny-1, 6] = f_star[i+1, 0:Ny-2, 6]
-    f_i[i, 1:Ny-1, 7] = f_star[i+1, 2:Ny, 7]
-    f_i[i, 1:Ny-1, 8] = f_star[i, 1:Ny-1, 6]        # Bounce
+    f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+    f_plus[i, 1:Ny-1, 1] = (f_star[i, 1:Ny-1, 3] + f_star[i+1, 1:Ny-1, 3]) / 2      # Bounce
+    f_plus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] + f_star[i, 2:Ny, 4]) / 2
+    f_plus[i, 1:Ny-1, 3] = f_plus[i, 1:Ny-1, 1]
+    f_plus[i, 1:Ny-1, 4] = f_plus[i, 1:Ny-1, 2]
+    f_plus[i, 1:Ny-1, 5] = (f_star[i, 1:Ny-1, 7] + f_star[i+1, 2:Ny, 7]) / 2        # Bounce
+    f_plus[i, 1:Ny-1, 6] = (f_star[i+1, 0:Ny-2, 6] + f_star[i, 1:Ny-1, 6]) / 2
+    f_plus[i, 1:Ny-1, 7] = f_plus[i, 1:Ny-1, 5]
+    f_plus[i, 1:Ny-1, 8] = f_plus[i, 1:Ny-1, 6]                                     # Bounce
 
-    return f_i
+    f_minus[i, 1:Ny-1, 0] = 0
+    f_minus[i, 1:Ny-1, 1] = (f_star[i, 1:Ny-1, 3] - f_star[i+1, 1:Ny-1, 3]) / 2     # Bounce
+    f_minus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] - f_star[i, 2:Ny, 4]) / 2
+    f_minus[i, 1:Ny-1, 3] = -f_minus[i, 1:Ny-1, 1]
+    f_minus[i, 1:Ny-1, 4] = -f_minus[i, 1:Ny-1, 2]
+    f_minus[i, 1:Ny-1, 5] = (f_star[i, 1:Ny-1, 7] - f_star[i+1, 2:Ny, 7]) / 2       # Bounce
+    f_minus[i, 1:Ny-1, 6] = (f_star[i+1, 0:Ny-2, 6] - f_star[i, 1:Ny-1, 6]) / 2
+    f_minus[i, 1:Ny-1, 7] = -f_minus[i, 1:Ny-1, 5]
+    f_minus[i, 1:Ny-1, 8] = -f_minus[i, 1:Ny-1, 6]                                  # Bounce
+
+    # f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+    # f_i[i, 1:Ny-1, 1] = f_star[i, 1:Ny-1, 3]        # Bounce
+    # f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
+    # f_i[i, 1:Ny-1, 3] = f_star[i+1, 1:Ny-1, 3]
+    # f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
+    # f_i[i, 1:Ny-1, 5] = f_star[i, 1:Ny-1, 7]        # Bounce
+    # f_i[i, 1:Ny-1, 6] = f_star[i+1, 0:Ny-2, 6]
+    # f_i[i, 1:Ny-1, 7] = f_star[i+1, 2:Ny, 7]
+    # f_i[i, 1:Ny-1, 8] = f_star[i, 1:Ny-1, 6]        # Bounce
+
+    return f_plus, f_minus
 
 @jit
-def right_wall(Nx, Ny, f_i, f_star):
+def right_wall(Nx, Ny, f_plus, f_minus, f_star):
     i = Nx - 1
 
-    f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
-    f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
-    f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
-    f_i[i, 1:Ny-1, 3] = f_star[i, 1:Ny-1, 1]        # Bounce
-    f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
-    f_i[i, 1:Ny-1, 5] = f_star[i-1, 0:Ny-2, 5]
-    f_i[i, 1:Ny-1, 6] = f_star[i, 1:Ny-1, 8]        # Bounce
-    f_i[i, 1:Ny-1, 7] = f_star[i, 1:Ny-1, 5]        # Bounce
-    f_i[i, 1:Ny-1, 8] = f_star[i-1, 2:Ny, 8]
+    f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+    f_plus[i, 1:Ny-1, 1] = (f_star[i, 1:Ny-1, 3] + f_star[i+1, 1:Ny-1, 3]) / 2      # Bounce
+    f_plus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] + f_star[i, 2:Ny, 4]) / 2
+    f_plus[i, 1:Ny-1, 3] = f_plus[i, 1:Ny-1, 1]
+    f_plus[i, 1:Ny-1, 4] = f_plus[i, 1:Ny-1, 2]
+    f_plus[i, 1:Ny-1, 5] = (f_star[i-1, 0:Ny-2, 5] + f_star[i, 1:Ny-1, 5]) / 2
+    f_plus[i, 1:Ny-1, 6] = (f_star[i, 1:Ny-1, 8] + f_star[i-1, 2:Ny, 8]) / 2        # Bounce
+    f_plus[i, 1:Ny-1, 7] = f_plus[i, 1:Ny-1, 5]                                     # Bounce
+    f_plus[i, 1:Ny-1, 8] = f_plus[i, 1:Ny-1, 6]
 
-    return f_i
+    f_minus[i, 1:Ny-1, 0] = 0
+    f_minus[i, 1:Ny-1, 1] = (f_star[i, 1:Ny-1, 3] - f_star[i+1, 1:Ny-1, 3]) / 2     # Bounce
+    f_minus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] - f_star[i, 2:Ny, 4]) / 2
+    f_minus[i, 1:Ny-1, 3] = -f_minus[i, 1:Ny-1, 1]
+    f_minus[i, 1:Ny-1, 4] = -f_minus[i, 1:Ny-1, 2]
+    f_minus[i, 1:Ny-1, 5] = (f_star[i-1, 0:Ny-2, 5] - f_star[i, 1:Ny-1, 5]) / 2
+    f_minus[i, 1:Ny-1, 6] = (f_star[i, 1:Ny-1, 8] - f_star[i-1, 2:Ny, 8]) / 2       # Bounce
+    f_minus[i, 1:Ny-1, 7] = -f_minus[i, 1:Ny-1, 5]                                  # Bounce
+    f_minus[i, 1:Ny-1, 8] = -f_minus[i, 1:Ny-1, 6]
+
+    # f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+    # f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
+    # f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
+    # f_i[i, 1:Ny-1, 3] = f_star[i, 1:Ny-1, 1]        # Bounce
+    # f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
+    # f_i[i, 1:Ny-1, 5] = f_star[i-1, 0:Ny-2, 5]
+    # f_i[i, 1:Ny-1, 6] = f_star[i, 1:Ny-1, 8]        # Bounce
+    # f_i[i, 1:Ny-1, 7] = f_star[i, 1:Ny-1, 5]        # Bounce
+    # f_i[i, 1:Ny-1, 8] = f_star[i-1, 2:Ny, 8]
+
+    return f_plus, f_minus
 
 @jit
-def lower_wall(Nx, f_i, f_star):
+def lower_wall(Nx, f_plus, f_minus, f_star):
     j = 0
 
-    f_i[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
-    f_i[1:Nx-1, j, 1] = f_star[0:Nx-2, j, 1]
-    f_i[1:Nx-1, j, 2] = f_star[1:Nx-1, j, 4]        # Bounce
-    f_i[1:Nx-1, j, 3] = f_star[2:Nx, j, 3]
-    f_i[1:Nx-1, j, 4] = f_star[1:Nx-1, j+1, 4]
-    f_i[1:Nx-1, j, 5] = f_star[1:Nx-1, j, 7]        # Bounce
-    f_i[1:Nx-1, j, 6] = f_star[1:Nx-1, j, 8]        # Bounce
-    f_i[1:Nx-1, j, 7] = f_star[2:Nx, j+1, 7]
-    f_i[1:Nx-1, j, 8] = f_star[0:Nx-2, j+1, 8]
+    f_plus[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
+    f_plus[1:Nx-1, j, 1] = (f_star[0:Nx-2, j, 1] + f_star[2:Nx, j, 3]) / 2
+    f_plus[1:Nx-1, j, 2] = (f_star[1:Nx-1, j, 4] + f_star[1:Nx-1, j+1, 4]) / 2      # Bounce
+    f_plus[1:Nx-1, j, 3] = f_plus[1:Nx-1, j, 1]
+    f_plus[1:Nx-1, j, 4] = f_plus[1:Nx-1, j, 2]
+    f_plus[1:Nx-1, j, 5] = (f_star[1:Nx-1, j, 7] + f_star[2:Nx, j+1, 7]) / 2        # Bounce
+    f_plus[1:Nx-1, j, 6] = (f_star[1:Nx-1, j, 8] + f_star[0:Nx-2, j+1, 8]) / 2      # Bounce
+    f_plus[1:Nx-1, j, 7] = f_plus[1:Nx-1, j, 5]
+    f_plus[1:Nx-1, j, 8] = f_plus[1:Nx-1, j, 6]
 
-    return f_i
+    f_minus[1:Nx-1, j, 0] = 0
+    f_minus[1:Nx-1, j, 1] = (f_star[0:Nx-2, j, 1] - f_star[2:Nx, j, 3]) / 2
+    f_minus[1:Nx-1, j, 2] = (f_star[1:Nx-1, j, 4] - f_star[1:Nx-1, j+1, 4]) / 2      # Bounce
+    f_minus[1:Nx-1, j, 3] = -f_minus[1:Nx-1, j, 1]
+    f_minus[1:Nx-1, j, 4] = -f_minus[1:Nx-1, j, 2]
+    f_minus[1:Nx-1, j, 5] = (f_star[1:Nx-1, j, 7] - f_star[2:Nx, j+1, 7]) / 2        # Bounce
+    f_minus[1:Nx-1, j, 6] = (f_star[1:Nx-1, j, 8] - f_star[0:Nx-2, j+1, 8]) / 2      # Bounce
+    f_minus[1:Nx-1, j, 7] = -f_minus[1:Nx-1, j, 5]
+    f_minus[1:Nx-1, j, 8] = -f_minus[1:Nx-1, j, 6]
+
+    # f_i[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
+    # f_i[1:Nx-1, j, 1] = f_star[0:Nx-2, j, 1]
+    # f_i[1:Nx-1, j, 2] = f_star[1:Nx-1, j, 4]        # Bounce
+    # f_i[1:Nx-1, j, 3] = f_star[2:Nx, j, 3]
+    # f_i[1:Nx-1, j, 4] = f_star[1:Nx-1, j+1, 4]
+    # f_i[1:Nx-1, j, 5] = f_star[1:Nx-1, j, 7]        # Bounce
+    # f_i[1:Nx-1, j, 6] = f_star[1:Nx-1, j, 8]        # Bounce
+    # f_i[1:Nx-1, j, 7] = f_star[2:Nx, j+1, 7]
+    # f_i[1:Nx-1, j, 8] = f_star[0:Nx-2, j+1, 8]
+
+    return f_plus, f_minus
 
 @jit
-def upper_wall(Nx, Ny, f_i, f_star):
+def upper_wall(Nx, Ny, f_plus, f_minus, f_star):
     j = Ny - 1
 
-    f_i[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
-    f_i[1:Nx-1, j, 1] = f_star[0:Nx-2, j, 1]
-    f_i[1:Nx-1, j, 2] = f_star[1:Nx-1, j-1, 2]
-    f_i[1:Nx-1, j, 3] = f_star[2:Nx, j, 3]
-    f_i[1:Nx-1, j, 4] = f_star[1:Nx-1, j, 2]        # Bounce
-    f_i[1:Nx-1, j, 5] = f_star[0:Nx-2, j-1, 5]
-    f_i[1:Nx-1, j, 6] = f_star[2:Nx, j-1, 6]
-    f_i[1:Nx-1, j, 7] = f_star[1:Nx-1, j, 5]        # Bounce
-    f_i[1:Nx-1, j, 8] = f_star[1:Nx-1, j, 6]        # Bounce
+    f_plus[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
+    f_plus[1:Nx-1, j, 1] = (f_star[0:Nx-2, j, 1] + f_star[2:Nx, j, 3]) / 2
+    f_plus[1:Nx-1, j, 2] = (f_star[1:Nx-1, j-1, 2] + f_star[1:Nx-1, j, 2]) / 2
+    f_plus[1:Nx-1, j, 3] = f_plus[1:Nx-1, j, 1]
+    f_plus[1:Nx-1, j, 4] = f_plus[1:Nx-1, j, 2]
+    f_plus[1:Nx-1, j, 5] = (f_star[0:Nx-2, j-1, 5] + f_star[1:Nx-1, j, 5]) / 2
+    f_plus[1:Nx-1, j, 6] = (f_star[2:Nx, j-1, 6] + f_star[1:Nx-1, j, 6]) / 2
+    f_plus[1:Nx-1, j, 7] = f_plus[1:Nx-1, j, 5]
+    f_plus[1:Nx-1, j, 8] = f_plus[1:Nx-1, j, 6]
 
-    return f_i
+    f_minus[1:Nx-1, j, 0] = 0
+    f_minus[1:Nx-1, j, 1] = (f_star[0:Nx-2, j, 1] - f_star[2:Nx, j, 3]) / 2
+    f_minus[1:Nx-1, j, 2] = (f_star[1:Nx-1, j-1, 2] - f_star[1:Nx-1, j, 2]) / 2
+    f_minus[1:Nx-1, j, 3] = -f_minus[1:Nx-1, j, 1]
+    f_minus[1:Nx-1, j, 4] = -f_minus[1:Nx-1, j, 2]
+    f_minus[1:Nx-1, j, 5] = (f_star[0:Nx-2, j-1, 5] - f_star[1:Nx-1, j, 5]) / 2
+    f_minus[1:Nx-1, j, 6] = (f_star[2:Nx, j-1, 6] - f_star[1:Nx-1, j, 6]) / 2
+    f_minus[1:Nx-1, j, 7] = -f_minus[1:Nx-1, j, 5]
+    f_minus[1:Nx-1, j, 8] = -f_minus[1:Nx-1, j, 6]
+
+    # f_i[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
+    # f_i[1:Nx-1, j, 1] = f_star[0:Nx-2, j, 1]
+    # f_i[1:Nx-1, j, 2] = f_star[1:Nx-1, j-1, 2]
+    # f_i[1:Nx-1, j, 3] = f_star[2:Nx, j, 3]
+    # f_i[1:Nx-1, j, 4] = f_star[1:Nx-1, j, 2]        # Bounce
+    # f_i[1:Nx-1, j, 5] = f_star[0:Nx-2, j-1, 5]
+    # f_i[1:Nx-1, j, 6] = f_star[2:Nx, j-1, 6]
+    # f_i[1:Nx-1, j, 7] = f_star[1:Nx-1, j, 5]        # Bounce
+    # f_i[1:Nx-1, j, 8] = f_star[1:Nx-1, j, 6]        # Bounce
+
+    return f_plus, f_minus
 
 @jit
-def lower_left_corner(f_i, f_star):
+def lower_left_corner(f_plus, f_minus, f_star):
     i = 0
     j = 0
 
-    f_i[i, j, 0] = f_star[i, j, 0]
-    f_i[i, j, 1] = f_star[i, j, 3]                  # Bounce
-    f_i[i, j, 2] = f_star[i, j, 4]                  # Bounce
-    f_i[i, j, 3] = f_star[i+1, j, 3]
-    f_i[i, j, 4] = f_star[i, j+1, 4]
-    f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
-    # f_i[i, j, 6] = 0
-    f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
-    f_i[i, j, 7] = f_star[i+1, j+1, 7]
-    # f_i[i, j, 8] = 0
-    f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
+    f_plus[i, j, 0] = f_star[i, j, 0]
+    f_plus[i, j, 1] = (f_star[i, j, 3] + f_star[i+1, j, 3]) / 2
+    f_plus[i, j, 2] = (f_star[i, j, 4] + f_star[i, j+1, 4]) / 2
+    f_plus[i, j, 3] = f_plus[i, j, 1]
+    f_plus[i, j, 4] = f_plus[i, j, 2]
+    f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i+1, j+1, 7]) / 2
+    f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i, j, 6]) / 2
+    f_plus[i, j, 7] = f_plus[i, j, 5]
+    f_plus[i, j, 8] = f_plus[i, j, 6]
 
-    return f_i
+    f_minus[i, j, 0] = 0
+    f_minus[i, j, 1] = (f_star[i, j, 3] - f_star[i+1, j, 3]) / 2
+    f_minus[i, j, 2] = (f_star[i, j, 4] - f_star[i, j+1, 4]) / 2
+    f_minus[i, j, 3] = -f_minus[i, j, 1]
+    f_minus[i, j, 4] = -f_minus[i, j, 2]
+    f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i+1, j+1, 7]) / 2
+    f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i, j, 6]) / 2
+    f_minus[i, j, 7] = -f_minus[i, j, 5]
+    f_minus[i, j, 8] = -f_minus[i, j, 6]
+
+    # f_i[i, j, 0] = f_star[i, j, 0]
+    # f_i[i, j, 1] = f_star[i, j, 3]                  # Bounce
+    # f_i[i, j, 2] = f_star[i, j, 4]                  # Bounce
+    # f_i[i, j, 3] = f_star[i+1, j, 3]
+    # f_i[i, j, 4] = f_star[i, j+1, 4]
+    # f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
+    # f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
+    # f_i[i, j, 7] = f_star[i+1, j+1, 7]
+    # f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
+
+    return f_plus, f_minus
 
 @jit
-def lower_right_corner(Nx, f_i, f_star):
+def lower_right_corner(Nx, f_plus, f_minus, f_star):
     i = Nx - 1
     j = 0
 
-    f_i[i, j, 0] = f_star[i, j, 0]
-    f_i[i, j, 1] = f_star[i-1, j, 1]
-    f_i[i, j, 2] = f_star[i, j, 4]                  # Bounce
-    f_i[i, j, 3] = f_star[i, j, 1]                  # Bounce
-    f_i[i, j, 4] = f_star[i, j+1, 4]
-    # f_i[i, j, 5] = 0
-    f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
-    f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
-    # f_i[i, j, 7] = 0
-    f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
-    f_i[i, j, 8] = f_star[i-1, j+1, 8]
+    f_plus[i, j, 0] = f_star[i, j, 0]
+    f_plus[i, j, 1] = (f_star[i-1, j, 1] + f_star[i, j, 1]) / 2
+    f_plus[i, j, 2] = (f_star[i, j, 4] + f_star[i, j+1, 4]) / 2
+    f_plus[i, j, 3] = f_plus[i, j, 1]
+    f_plus[i, j, 4] = f_plus[i, j, 2]
+    f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i, j, 5]) / 2
+    f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i-1, j+1, 8]) / 2
+    f_plus[i, j, 7] = f_plus[i, j, 5]
+    f_plus[i, j, 8] = f_plus[i, j, 6]
 
-    return f_i
+    f_minus[i, j, 0] = 0
+    f_minus[i, j, 1] = (f_star[i-1, j, 1] - f_star[i, j, 1]) / 2
+    f_minus[i, j, 2] = (f_star[i, j, 4] - f_star[i, j+1, 4]) / 2
+    f_minus[i, j, 3] = -f_minus[i, j, 1]
+    f_minus[i, j, 4] = -f_minus[i, j, 2]
+    f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i, j, 5]) / 2
+    f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i-1, j+1, 8]) / 2
+    f_minus[i, j, 7] = -f_minus[i, j, 5]
+    f_minus[i, j, 8] = -f_minus[i, j, 6]
+
+    # f_i[i, j, 0] = f_star[i, j, 0]
+    # f_i[i, j, 1] = f_star[i-1, j, 1]
+    # f_i[i, j, 2] = f_star[i, j, 4]                  # Bounce
+    # f_i[i, j, 3] = f_star[i, j, 1]                  # Bounce
+    # f_i[i, j, 4] = f_star[i, j+1, 4]
+    # f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
+    # f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
+    # f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
+    # f_i[i, j, 8] = f_star[i-1, j+1, 8]
+
+    return f_plus, f_minus
 
 @jit
-def upper_left_corner(f_i, f_star):
+def upper_left_corner(f_plus, f_minus, f_star):
     i = 0
     j = Ny - 1
 
-    f_i[i, j, 0] = f_star[i, j, 0]
-    f_i[i, j, 1] = f_star[i, j, 3]                  # Bounce
-    f_i[i, j, 2] = f_star[i, j-1, 2]
-    f_i[i, j, 3] = f_star[i+1, j, 3]
-    f_i[i, j, 4] = f_star[i, j, 2]                  # Bounce
-    # f_i[i, j, 5] = 0
-    f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
-    f_i[i, j, 6] = f_star[i+1, j-1, 6]
-    # f_i[i, j, 7] = 0
-    f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
-    f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
+    f_plus[i, j, 0] = f_star[i, j, 0]
+    f_plus[i, j, 1] = (f_star[i, j, 3] + f_star[i+1, j, 3]) / 2
+    f_plus[i, j, 2] = (f_star[i, j-1, 2] + f_star[i, j, 2]) / 2
+    f_plus[i, j, 3] = f_plus[i, j, 1]
+    f_plus[i, j, 4] = f_plus[i, j, 2]
+    f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i, j, 5]) / 2
+    f_plus[i, j, 6] = (f_star[i+1, j-1, 6] + f_star[i, j, 6]) / 2
+    f_plus[i, j, 7] = f_plus[i, j, 5]
+    f_plus[i, j, 8] = f_plus[i, j, 6]
 
-    return f_i
+    f_minus[i, j, 0] = 0
+    f_minus[i, j, 1] = (f_star[i, j, 3] + f_star[i+1, j, 3]) / 2
+    f_minus[i, j, 2] = (f_star[i, j-1, 2] + f_star[i, j, 2]) / 2
+    f_minus[i, j, 3] = -f_minus[i, j, 1]
+    f_minus[i, j, 4] = -f_minus[i, j, 2]
+    f_minus[i, j, 5] = (f_star[i, j, 7] + f_star[i, j, 5]) / 2
+    f_minus[i, j, 6] = (f_star[i+1, j-1, 6] + f_star[i, j, 6]) / 2
+    f_minus[i, j, 7] = -f_minus[i, j, 5]
+    f_minus[i, j, 8] = -f_minus[i, j, 6]
+
+    # f_i[i, j, 0] = f_star[i, j, 0]
+    # f_i[i, j, 1] = f_star[i, j, 3]                  # Bounce
+    # f_i[i, j, 2] = f_star[i, j-1, 2]
+    # f_i[i, j, 3] = f_star[i+1, j, 3]
+    # f_i[i, j, 4] = f_star[i, j, 2]                  # Bounce
+    # f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
+    # f_i[i, j, 6] = f_star[i+1, j-1, 6]
+    # f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
+    # f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
+
+    return f_plus, f_minus
 
 @jit
-def upper_right_corner(f_i, f_star):
+def upper_right_corner(f_plus, f_minus, f_star):
     i = Nx - 1
     j = Ny - 1
 
-    f_i[i, j, 0] = f_star[i, j, 0]
-    f_i[i, j, 1] = f_star[i-1, j, 1]
-    f_i[i, j, 2] = f_star[i, j-1, 2]
-    f_i[i, j, 3] = f_star[i, j, 1]                  # Bounce
-    f_i[i, j, 4] = f_star[i, j, 2]                  # Bounce
-    f_i[i, j, 5] = f_star[i-1, j-1, 5]
-    # f_i[i, j, 6] = 0
-    f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
-    f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
-    # f_i[i, j, 8] = 0
-    f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
+    f_plus[i, j, 0] = f_star[i, j, 0]
+    f_plus[i, j, 1] = (f_star[i-1, j, 1] + f_star[i-1, j, 1]) / 2
+    f_plus[i, j, 2] = (f_star[i, j-1, 2] + f_star[i, j, 2]) / 2
+    f_plus[i, j, 3] = f_plus[i, j, 1]
+    f_plus[i, j, 4] = f_plus[i, j, 2]
+    f_plus[i, j, 5] = (f_star[i-1, j-1, 5] + f_star[i, j, 5]) / 2
+    f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i, j, 6]) / 2
+    f_plus[i, j, 7] = f_plus[i, j, 5]
+    f_plus[i, j, 8] = f_plus[i, j, 6]
 
-    return f_i
+    f_minus[i, j, 0] = 0
+    f_minus[i, j, 1] = (f_star[i-1, j, 1] + f_star[i-1, j, 1]) / 2
+    f_minus[i, j, 2] = (f_star[i, j-1, 2] + f_star[i, j, 2]) / 2
+    f_minus[i, j, 3] = -f_minus[i, j, 1]
+    f_minus[i, j, 4] = -f_minus[i, j, 2]
+    f_minus[i, j, 5] = (f_star[i-1, j-1, 5] + f_star[i, j, 5]) / 2
+    f_minus[i, j, 6] = (f_star[i, j, 8] + f_star[i, j, 6]) / 2
+    f_minus[i, j, 7] = -f_minus[i, j, 5]
+    f_minus[i, j, 8] = -f_minus[i, j, 6]
 
-def streaming(Nx, Ny, f_i, f_star):
-    f_i = fluid(Nx, Ny, f_i, f_star)
-    f_i = left_wall(Ny, f_i, f_star)
-    f_i = right_wall(Nx, Ny, f_i, f_star)
-    f_i = lower_wall(Nx, f_i, f_star)
-    f_i = upper_wall(Nx, Ny, f_i, f_star)
-    f_i = lower_left_corner(f_i, f_star)
-    f_i = lower_right_corner(Nx, f_i, f_star)
-    f_i = upper_left_corner(f_i, f_star)
-    f_i = upper_right_corner(f_i, f_star)
+    # f_i[i, j, 0] = f_star[i, j, 0]
+    # f_i[i, j, 1] = f_star[i-1, j, 1]
+    # f_i[i, j, 2] = f_star[i, j-1, 2]
+    # f_i[i, j, 3] = f_star[i-1, j, 1]                 # Bounce
+    # f_i[i, j, 4] = f_star[i, j, 2]                  # Bounce
+    # f_i[i, j, 5] = f_star[i-1, j-1, 5]
+    # f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
+    # f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
+    # f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
 
-    return f_i
+    return f_plus, f_minus
+
+def streaming(Nx, Ny, f_plus, f_minus, f_star):
+    f_plus, f_minus = fluid(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = left_wall(Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = right_wall(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = lower_wall(Nx, f_plus, f_minus, f_star)
+    f_plus, f_minus = upper_wall(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = lower_left_corner(f_plus, f_minus, f_star)
+    f_plus, f_minus = lower_right_corner(Nx, f_plus, f_minus, f_star)
+    f_plus, f_minus = upper_left_corner(f_plus, f_minus, f_star)
+    f_plus, f_minus = upper_right_corner(f_plus, f_minus, f_star)
+
+    return f_plus, f_minus
 
 @jit
 def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s, F):
@@ -361,7 +533,7 @@ F_buoy = - T_dim[:, :, None] * g_sim
 
 # Initialize equilibrium function
 f_plus, f_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
-f_i = f_plus + f_minus
+# f_i = f_plus + f_minus
 
 start = time.time()
 
@@ -386,15 +558,15 @@ for t in range(Nt):
     f_eq_plus, f_eq_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
 
     # Collision step
-    f_star = f_i - (f_plus - f_eq_plus) / tau_plus - (f_minus - f_eq_minus) / tau_minus + Si
+    f_star = f_plus + f_minus - (f_plus - f_eq_plus) / tau_plus - (f_minus - f_eq_minus) / tau_minus + Si
     # if t in [0, 1, 2, 3]:
     #     print(t, f_star[:, :, 1].T)
 
     # Streaming step
-    f_i = streaming(Nx, Ny, f_i, f_star)
+    f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
     # if t in [0, 1, 2, 3]:
     #     print(t, f_i[:, :, 1].T)
-    f_plus, f_minus = decompose_f_i(f_i)
+    # f_plus, f_minus = decompose_f_i(f_i)
 
 stop = time.time()
 print(stop-start)
@@ -421,15 +593,15 @@ T = T_dim / beta + T0
 
 ## Vector plot
 # plt.figure(np.int(t/200)+1)
-x = np.linspace(dx, L-dx, len(ux))
-y = np.linspace(dx, H-dx, len(uy))
-fig = ff.create_streamline(x, y, ux.T, uy.T)
-fig.show()
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
-plt.legend('Velocity vector')
-plt.savefig(f"Figures/flow_test/streamplot_time{Time}_test.png")
+# x = np.linspace(dx, L-dx, len(ux))
+# y = np.linspace(dx, H-dx, len(uy))
+# fig = ff.create_streamline(x, y, ux.T, uy.T)
+# fig.show()
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title('Velocity profile in pipe with hot plate for $x < L/2$ and cold plate for $x > L/2$. \n $p>0$')
+# plt.legend('Velocity vector')
+# plt.savefig(f"Figures/flow_test/streamplot_time{Time}_test.png")
 
 # Vector plot
 plt.figure(np.int(t/200)+2, dpi=300)
@@ -438,7 +610,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'$u$ in pipe with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
 # plt.legend('Velocity vector')
-plt.savefig(f"Figures/flow_test/arrowplot_time{Time}_test.png")
+plt.savefig(f"Figures/flow_test/arrowplot_time{Time}_test2.png")
 
 # Heatmaps
 plt.figure(2)
@@ -448,35 +620,35 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
 plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_ux_time{Time}_test.png")
+plt.savefig(f"Figures/flow_test/heatmap_ux_time{Time}_test2.png")
 
-plt.figure(3)
-plt.clf()
-plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'$u_y$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
-plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_uy_time{Time}_test.png")
-
-plt.figure(5)
-plt.clf()
-plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
-plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_rho_time{Time}_test.png")
-
-## Temperature heatmap
-plt.figure(4)
-plt.clf()
-plt.imshow(np.flip(T.T, axis=0), cmap=cm.Blues)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. No flow.')
-plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_T_time{Time}_test.png")
+# plt.figure(3)
+# plt.clf()
+# plt.imshow(np.flip(Cu*uy, axis=1).T, cmap=cm.Blues)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title(f'$u_y$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+# plt.colorbar()
+# plt.savefig(f"Figures/flow_test/heatmap_uy_time{Time}_test.png")
+#
+# plt.figure(5)
+# plt.clf()
+# plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+# plt.colorbar()
+# plt.savefig(f"Figures/flow_test/heatmap_rho_time{Time}_test.png")
+#
+# ## Temperature heatmap
+# plt.figure(4)
+# plt.clf()
+# plt.imshow(np.flip(T.T, axis=0), cmap=cm.Blues)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title('$T$ in cavity with left wall at $T=298K$ and right wall at $T=288K$. No flow.')
+# plt.colorbar()
+# plt.savefig(f"Figures/flow_test/heatmap_T_time{Time}_test.png")
 #
 # ## Temperature line plot
 # plt.figure(0)

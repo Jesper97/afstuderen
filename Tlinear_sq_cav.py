@@ -125,164 +125,254 @@ def easy_view(nr, arr):
     print(nr, dataset)
 
 @njit
-def fluid(Nx, Ny, f_i, f_star):
-    for i in range(1, Nx-1):                # Streaming in all nodes expect ones nearest to the wall
-        f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
-        f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
-        f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
-        f_i[i, 1:Ny-1, 3] = f_star[i+1, 1:Ny-1, 3]
-        f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
-        f_i[i, 1:Ny-1, 5] = f_star[i-1, 0:Ny-2, 5]
-        f_i[i, 1:Ny-1, 6] = f_star[i+1, 0:Ny-2, 6]
-        f_i[i, 1:Ny-1, 7] = f_star[i+1, 2:Ny, 7]
-        f_i[i, 1:Ny-1, 8] = f_star[i-1, 2:Ny, 8]
+def fluid(Nx, Ny, f_plus, f_minus, f_star):
+    for i in range(1, Nx-1):
+        f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+        f_plus[i, 1:Ny-1, 1] = (f_star[i-1, 1:Ny-1, 1] + f_star[i+1, 1:Ny-1, 3]) / 2
+        f_plus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] + f_star[i, 2:Ny, 4]) / 2
+        f_plus[i, 1:Ny-1, 3] = f_plus[i, 1:Ny-1, 1]
+        f_plus[i, 1:Ny-1, 4] = f_plus[i, 1:Ny-1, 2]
+        f_plus[i, 1:Ny-1, 5] = (f_star[i-1, 0:Ny-2, 5] + f_star[i+1, 2:Ny, 7]) / 2
+        f_plus[i, 1:Ny-1, 6] = (f_star[i+1, 0:Ny-2, 6] + f_star[i-1, 2:Ny, 8]) / 2
+        f_plus[i, 1:Ny-1, 7] = f_plus[i, 1:Ny-1, 5]
+        f_plus[i, 1:Ny-1, 8] = f_plus[i, 1:Ny-1, 6]
 
-    return f_i
+        f_minus[i, 1:Ny-1, 0] = 0
+        f_minus[i, 1:Ny-1, 1] = (f_star[i-1, 1:Ny-1, 1] - f_star[i+1, 1:Ny-1, 3]) / 2
+        f_minus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] - f_star[i, 2:Ny, 4]) / 2
+        f_minus[i, 1:Ny-1, 3] = -f_minus[i, 1:Ny-1, 1]
+        f_minus[i, 1:Ny-1, 4] = -f_minus[i, 1:Ny-1, 2]
+        f_minus[i, 1:Ny-1, 5] = (f_star[i-1, 0:Ny-2, 5] - f_star[i+1, 2:Ny, 7]) / 2
+        f_minus[i, 1:Ny-1, 6] = (f_star[i+1, 0:Ny-2, 6] - f_star[i-1, 2:Ny, 8]) / 2
+        f_minus[i, 1:Ny-1, 7] = -f_minus[i, 1:Ny-1, 5]
+        f_minus[i, 1:Ny-1, 8] = -f_minus[i, 1:Ny-1, 6]
+
+    return f_plus, f_minus
 
 @njit
-def left_wall(Ny, f_i, f_star):             # Streaming in nodes touching left wall (half-way bounce-back)
+def left_wall(Ny, f_plus, f_minus, f_star):
     i = 0
 
-    f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
-    f_i[i, 1:Ny-1, 1] = f_star[i, 1:Ny-1, 3]        # Bounce
-    f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
-    f_i[i, 1:Ny-1, 3] = f_star[i+1, 1:Ny-1, 3]
-    f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
-    f_i[i, 1:Ny-1, 5] = f_star[i, 1:Ny-1, 7]        # Bounce
-    f_i[i, 1:Ny-1, 6] = f_star[i+1, 0:Ny-2, 6]
-    f_i[i, 1:Ny-1, 7] = f_star[i+1, 2:Ny, 7]
-    f_i[i, 1:Ny-1, 8] = f_star[i, 1:Ny-1, 6]        # Bounce
+    f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+    f_plus[i, 1:Ny-1, 1] = (f_star[i, 1:Ny-1, 3] + f_star[i+1, 1:Ny-1, 3]) / 2      # Bounce
+    f_plus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] + f_star[i, 2:Ny, 4]) / 2
+    f_plus[i, 1:Ny-1, 3] = f_plus[i, 1:Ny-1, 1]
+    f_plus[i, 1:Ny-1, 4] = f_plus[i, 1:Ny-1, 2]
+    f_plus[i, 1:Ny-1, 5] = (f_star[i, 1:Ny-1, 7] + f_star[i+1, 2:Ny, 7]) / 2        # Bounce
+    f_plus[i, 1:Ny-1, 6] = (f_star[i+1, 0:Ny-2, 6] + f_star[i, 1:Ny-1, 6]) / 2
+    f_plus[i, 1:Ny-1, 7] = f_plus[i, 1:Ny-1, 5]
+    f_plus[i, 1:Ny-1, 8] = f_plus[i, 1:Ny-1, 6]                                     # Bounce
 
-    return f_i
+    f_minus[i, 1:Ny-1, 0] = 0
+    f_minus[i, 1:Ny-1, 1] = (f_star[i, 1:Ny-1, 3] - f_star[i+1, 1:Ny-1, 3]) / 2     # Bounce
+    f_minus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] - f_star[i, 2:Ny, 4]) / 2
+    f_minus[i, 1:Ny-1, 3] = -f_minus[i, 1:Ny-1, 1]
+    f_minus[i, 1:Ny-1, 4] = -f_minus[i, 1:Ny-1, 2]
+    f_minus[i, 1:Ny-1, 5] = (f_star[i, 1:Ny-1, 7] - f_star[i+1, 2:Ny, 7]) / 2       # Bounce
+    f_minus[i, 1:Ny-1, 6] = (f_star[i+1, 0:Ny-2, 6] - f_star[i, 1:Ny-1, 6]) / 2
+    f_minus[i, 1:Ny-1, 7] = -f_minus[i, 1:Ny-1, 5]
+    f_minus[i, 1:Ny-1, 8] = -f_minus[i, 1:Ny-1, 6]                                  # Bounce
+
+    return f_plus, f_minus
 
 @njit
-def right_wall(Nx, Ny, f_i, f_star):        # Streaming in nodes touching right wall (half-way bounce-back)
+def right_wall(Nx, Ny, f_plus, f_minus, f_star):
     i = Nx - 1
 
-    f_i[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
-    f_i[i, 1:Ny-1, 1] = f_star[i-1, 1:Ny-1, 1]
-    f_i[i, 1:Ny-1, 2] = f_star[i, 0:Ny-2, 2]
-    f_i[i, 1:Ny-1, 3] = f_star[i, 1:Ny-1, 1]        # Bounce
-    f_i[i, 1:Ny-1, 4] = f_star[i, 2:Ny, 4]
-    f_i[i, 1:Ny-1, 5] = f_star[i-1, 0:Ny-2, 5]
-    f_i[i, 1:Ny-1, 6] = f_star[i, 1:Ny-1, 8]        # Bounce
-    f_i[i, 1:Ny-1, 7] = f_star[i, 1:Ny-1, 5]        # Bounce
-    f_i[i, 1:Ny-1, 8] = f_star[i-1, 2:Ny, 8]
+    f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
+    f_plus[i, 1:Ny-1, 1] = (f_star[i-1, 1:Ny-1, 1] + f_star[i, 1:Ny-1, 1]) / 2      # Bounce
+    f_plus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] + f_star[i, 2:Ny, 4]) / 2
+    f_plus[i, 1:Ny-1, 3] = f_plus[i, 1:Ny-1, 1]
+    f_plus[i, 1:Ny-1, 4] = f_plus[i, 1:Ny-1, 2]
+    f_plus[i, 1:Ny-1, 5] = (f_star[i-1, 0:Ny-2, 5] + f_star[i, 1:Ny-1, 5]) / 2
+    f_plus[i, 1:Ny-1, 6] = (f_star[i, 1:Ny-1, 8] + f_star[i-1, 2:Ny, 8]) / 2        # Bounce
+    f_plus[i, 1:Ny-1, 7] = f_plus[i, 1:Ny-1, 5]                                     # Bounce
+    f_plus[i, 1:Ny-1, 8] = f_plus[i, 1:Ny-1, 6]
 
-    return f_i
+    f_minus[i, 1:Ny-1, 0] = 0
+    f_minus[i, 1:Ny-1, 1] = (f_star[i-1, 1:Ny-1, 1] - f_star[i, 1:Ny-1, 1]) / 2     # Bounce
+    f_minus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] - f_star[i, 2:Ny, 4]) / 2
+    f_minus[i, 1:Ny-1, 3] = -f_minus[i, 1:Ny-1, 1]
+    f_minus[i, 1:Ny-1, 4] = -f_minus[i, 1:Ny-1, 2]
+    f_minus[i, 1:Ny-1, 5] = (f_star[i-1, 0:Ny-2, 5] - f_star[i, 1:Ny-1, 5]) / 2
+    f_minus[i, 1:Ny-1, 6] = (f_star[i, 1:Ny-1, 8] - f_star[i-1, 2:Ny, 8]) / 2       # Bounce
+    f_minus[i, 1:Ny-1, 7] = -f_minus[i, 1:Ny-1, 5]                                  # Bounce
+    f_minus[i, 1:Ny-1, 8] = -f_minus[i, 1:Ny-1, 6]
+
+    return f_plus, f_minus
 
 @njit
-def lower_wall(Nx, f_i, f_star):            # Streaming in nodes touching lower wall (half-way bounce-back)
+def lower_wall(Nx, f_plus, f_minus, f_star):
     j = 0
 
-    f_i[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
-    f_i[1:Nx-1, j, 1] = f_star[0:Nx-2, j, 1]
-    f_i[1:Nx-1, j, 2] = f_star[1:Nx-1, j, 4]        # Bounce
-    f_i[1:Nx-1, j, 3] = f_star[2:Nx, j, 3]
-    f_i[1:Nx-1, j, 4] = f_star[1:Nx-1, j+1, 4]
-    f_i[1:Nx-1, j, 5] = f_star[1:Nx-1, j, 7]        # Bounce
-    f_i[1:Nx-1, j, 6] = f_star[1:Nx-1, j, 8]        # Bounce
-    f_i[1:Nx-1, j, 7] = f_star[2:Nx, j+1, 7]
-    f_i[1:Nx-1, j, 8] = f_star[0:Nx-2, j+1, 8]
+    f_plus[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
+    f_plus[1:Nx-1, j, 1] = (f_star[0:Nx-2, j, 1] + f_star[2:Nx, j, 3]) / 2
+    f_plus[1:Nx-1, j, 2] = (f_star[1:Nx-1, j, 4] + f_star[1:Nx-1, j+1, 4]) / 2      # Bounce
+    f_plus[1:Nx-1, j, 3] = f_plus[1:Nx-1, j, 1]
+    f_plus[1:Nx-1, j, 4] = f_plus[1:Nx-1, j, 2]
+    f_plus[1:Nx-1, j, 5] = (f_star[1:Nx-1, j, 7] + f_star[2:Nx, j+1, 7]) / 2        # Bounce
+    f_plus[1:Nx-1, j, 6] = (f_star[1:Nx-1, j, 8] + f_star[0:Nx-2, j+1, 8]) / 2      # Bounce
+    f_plus[1:Nx-1, j, 7] = f_plus[1:Nx-1, j, 5]
+    f_plus[1:Nx-1, j, 8] = f_plus[1:Nx-1, j, 6]
 
-    return f_i
+    f_minus[1:Nx-1, j, 0] = 0
+    f_minus[1:Nx-1, j, 1] = (f_star[0:Nx-2, j, 1] - f_star[2:Nx, j, 3]) / 2
+    f_minus[1:Nx-1, j, 2] = (f_star[1:Nx-1, j, 4] - f_star[1:Nx-1, j+1, 4]) / 2      # Bounce
+    f_minus[1:Nx-1, j, 3] = -f_minus[1:Nx-1, j, 1]
+    f_minus[1:Nx-1, j, 4] = -f_minus[1:Nx-1, j, 2]
+    f_minus[1:Nx-1, j, 5] = (f_star[1:Nx-1, j, 7] - f_star[2:Nx, j+1, 7]) / 2        # Bounce
+    f_minus[1:Nx-1, j, 6] = (f_star[1:Nx-1, j, 8] - f_star[0:Nx-2, j+1, 8]) / 2      # Bounce
+    f_minus[1:Nx-1, j, 7] = -f_minus[1:Nx-1, j, 5]
+    f_minus[1:Nx-1, j, 8] = -f_minus[1:Nx-1, j, 6]
+
+    return f_plus, f_minus
 
 @njit
-def upper_wall(Nx, Ny, f_i, f_star):        # Streaming in nodes touching upper wall (half-way bounce-back)
+def upper_wall(Nx, Ny, f_plus, f_minus, f_star):
     j = Ny - 1
 
-    f_i[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
-    f_i[1:Nx-1, j, 1] = f_star[0:Nx-2, j, 1]
-    f_i[1:Nx-1, j, 2] = f_star[1:Nx-1, j-1, 2]
-    f_i[1:Nx-1, j, 3] = f_star[2:Nx, j, 3]
-    f_i[1:Nx-1, j, 4] = f_star[1:Nx-1, j, 2]        # Bounce
-    f_i[1:Nx-1, j, 5] = f_star[0:Nx-2, j-1, 5]
-    f_i[1:Nx-1, j, 6] = f_star[2:Nx, j-1, 6]
-    f_i[1:Nx-1, j, 7] = f_star[1:Nx-1, j, 5]        # Bounce
-    f_i[1:Nx-1, j, 8] = f_star[1:Nx-1, j, 6]        # Bounce
+    f_plus[1:Nx-1, j, 0] = f_star[1:Nx-1, j, 0]
+    f_plus[1:Nx-1, j, 1] = (f_star[0:Nx-2, j, 1] + f_star[2:Nx, j, 3]) / 2
+    f_plus[1:Nx-1, j, 2] = (f_star[1:Nx-1, j-1, 2] + f_star[1:Nx-1, j, 2]) / 2
+    f_plus[1:Nx-1, j, 3] = f_plus[1:Nx-1, j, 1]
+    f_plus[1:Nx-1, j, 4] = f_plus[1:Nx-1, j, 2]
+    f_plus[1:Nx-1, j, 5] = (f_star[0:Nx-2, j-1, 5] + f_star[1:Nx-1, j, 5]) / 2
+    f_plus[1:Nx-1, j, 6] = (f_star[2:Nx, j-1, 6] + f_star[1:Nx-1, j, 6]) / 2
+    f_plus[1:Nx-1, j, 7] = f_plus[1:Nx-1, j, 5]
+    f_plus[1:Nx-1, j, 8] = f_plus[1:Nx-1, j, 6]
 
-    return f_i
+    f_minus[1:Nx-1, j, 0] = 0
+    f_minus[1:Nx-1, j, 1] = (f_star[0:Nx-2, j, 1] - f_star[2:Nx, j, 3]) / 2
+    f_minus[1:Nx-1, j, 2] = (f_star[1:Nx-1, j-1, 2] - f_star[1:Nx-1, j, 2]) / 2
+    f_minus[1:Nx-1, j, 3] = -f_minus[1:Nx-1, j, 1]
+    f_minus[1:Nx-1, j, 4] = -f_minus[1:Nx-1, j, 2]
+    f_minus[1:Nx-1, j, 5] = (f_star[0:Nx-2, j-1, 5] - f_star[1:Nx-1, j, 5]) / 2
+    f_minus[1:Nx-1, j, 6] = (f_star[2:Nx, j-1, 6] - f_star[1:Nx-1, j, 6]) / 2
+    f_minus[1:Nx-1, j, 7] = -f_minus[1:Nx-1, j, 5]
+    f_minus[1:Nx-1, j, 8] = -f_minus[1:Nx-1, j, 6]
+
+    return f_plus, f_minus
 
 @njit
-def lower_left_corner(f_i, f_star):         # Streaming in node lower left corner (half-way bounce-back)
+def lower_left_corner(f_plus, f_minus, f_star):
     i = 0
     j = 0
 
-    f_i[i, j, 0] = f_star[i, j, 0]
-    f_i[i, j, 1] = f_star[i, j, 3]                  # Bounce
-    f_i[i, j, 2] = f_star[i, j, 4]                  # Bounce
-    f_i[i, j, 3] = f_star[i+1, j, 3]
-    f_i[i, j, 4] = f_star[i, j+1, 4]
-    f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
-    f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
-    f_i[i, j, 7] = f_star[i+1, j+1, 7]
-    f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
+    f_plus[i, j, 0] = f_star[i, j, 0]
+    f_plus[i, j, 1] = (f_star[i, j, 3] + f_star[i+1, j, 3]) / 2
+    f_plus[i, j, 2] = (f_star[i, j, 4] + f_star[i, j+1, 4]) / 2
+    f_plus[i, j, 3] = f_plus[i, j, 1]
+    f_plus[i, j, 4] = f_plus[i, j, 2]
+    f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i+1, j+1, 7]) / 2
+    f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i, j, 6]) / 2
+    f_plus[i, j, 7] = f_plus[i, j, 5]
+    f_plus[i, j, 8] = f_plus[i, j, 6]
 
-    return f_i
+    f_minus[i, j, 0] = 0
+    f_minus[i, j, 1] = (f_star[i, j, 3] - f_star[i+1, j, 3]) / 2
+    f_minus[i, j, 2] = (f_star[i, j, 4] - f_star[i, j+1, 4]) / 2
+    f_minus[i, j, 3] = -f_minus[i, j, 1]
+    f_minus[i, j, 4] = -f_minus[i, j, 2]
+    f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i+1, j+1, 7]) / 2
+    f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i, j, 6]) / 2
+    f_minus[i, j, 7] = -f_minus[i, j, 5]
+    f_minus[i, j, 8] = -f_minus[i, j, 6]
+
+    return f_plus, f_minus
 
 @njit
-def lower_right_corner(Nx, f_i, f_star):    # Streaming in node lower right corner (half-way bounce-back)
+def lower_right_corner(Nx, f_plus, f_minus, f_star):
     i = Nx - 1
     j = 0
 
-    f_i[i, j, 0] = f_star[i, j, 0]
-    f_i[i, j, 1] = f_star[i-1, j, 1]
-    f_i[i, j, 2] = f_star[i, j, 4]                  # Bounce
-    f_i[i, j, 3] = f_star[i, j, 1]                  # Bounce
-    f_i[i, j, 4] = f_star[i, j+1, 4]
-    f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
-    f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
-    f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
-    f_i[i, j, 8] = f_star[i-1, j+1, 8]
+    f_plus[i, j, 0] = f_star[i, j, 0]
+    f_plus[i, j, 1] = (f_star[i-1, j, 1] + f_star[i, j, 1]) / 2
+    f_plus[i, j, 2] = (f_star[i, j, 4] + f_star[i, j+1, 4]) / 2
+    f_plus[i, j, 3] = f_plus[i, j, 1]
+    f_plus[i, j, 4] = f_plus[i, j, 2]
+    f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i, j, 5]) / 2
+    f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i-1, j+1, 8]) / 2
+    f_plus[i, j, 7] = f_plus[i, j, 5]
+    f_plus[i, j, 8] = f_plus[i, j, 6]
 
-    return f_i
+    f_minus[i, j, 0] = 0
+    f_minus[i, j, 1] = (f_star[i-1, j, 1] - f_star[i, j, 1]) / 2
+    f_minus[i, j, 2] = (f_star[i, j, 4] - f_star[i, j+1, 4]) / 2
+    f_minus[i, j, 3] = -f_minus[i, j, 1]
+    f_minus[i, j, 4] = -f_minus[i, j, 2]
+    f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i, j, 5]) / 2
+    f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i-1, j+1, 8]) / 2
+    f_minus[i, j, 7] = -f_minus[i, j, 5]
+    f_minus[i, j, 8] = -f_minus[i, j, 6]
+
+    return f_plus, f_minus
 
 @njit
-def upper_left_corner(f_i, f_star):         # Streaming in node upper left corner (half-way bounce-back)
+def upper_left_corner(f_plus, f_minus, f_star):
     i = 0
     j = Ny - 1
 
-    f_i[i, j, 0] = f_star[i, j, 0]
-    f_i[i, j, 1] = f_star[i, j, 3]                  # Bounce
-    f_i[i, j, 2] = f_star[i, j-1, 2]
-    f_i[i, j, 3] = f_star[i+1, j, 3]
-    f_i[i, j, 4] = f_star[i, j, 2]                  # Bounce
-    f_i[i, j, 5] = f_star[i, j, 7]                  # Bounce
-    f_i[i, j, 6] = f_star[i+1, j-1, 6]
-    f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
-    f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
+    f_plus[i, j, 0] = f_star[i, j, 0]
+    f_plus[i, j, 1] = (f_star[i, j, 3] + f_star[i+1, j, 3]) / 2
+    f_plus[i, j, 2] = (f_star[i, j-1, 2] + f_star[i, j, 2]) / 2
+    f_plus[i, j, 3] = f_plus[i, j, 1]
+    f_plus[i, j, 4] = f_plus[i, j, 2]
+    f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i, j, 5]) / 2
+    f_plus[i, j, 6] = (f_star[i+1, j-1, 6] + f_star[i, j, 6]) / 2
+    f_plus[i, j, 7] = f_plus[i, j, 5]
+    f_plus[i, j, 8] = f_plus[i, j, 6]
 
-    return f_i
+    f_minus[i, j, 0] = 0
+    f_minus[i, j, 1] = (f_star[i, j, 3] - f_star[i+1, j, 3]) / 2
+    f_minus[i, j, 2] = (f_star[i, j-1, 2] - f_star[i, j, 2]) / 2
+    f_minus[i, j, 3] = -f_minus[i, j, 1]
+    f_minus[i, j, 4] = -f_minus[i, j, 2]
+    f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i, j, 5]) / 2
+    f_minus[i, j, 6] = (f_star[i+1, j-1, 6] - f_star[i, j, 6]) / 2
+    f_minus[i, j, 7] = -f_minus[i, j, 5]
+    f_minus[i, j, 8] = -f_minus[i, j, 6]
+
+    return f_plus, f_minus
 
 @njit
-def upper_right_corner(f_i, f_star):        # Streaming in node upper right corner (half-way bounce-back)
+def upper_right_corner(f_plus, f_minus, f_star):
     i = Nx - 1
     j = Ny - 1
 
-    f_i[i, j, 0] = f_star[i, j, 0]
-    f_i[i, j, 1] = f_star[i-1, j, 1]
-    f_i[i, j, 2] = f_star[i, j-1, 2]
-    f_i[i, j, 3] = f_star[i, j, 1]                  # Bounce
-    f_i[i, j, 4] = f_star[i, j, 2]                  # Bounce
-    f_i[i, j, 5] = f_star[i-1, j-1, 5]
-    f_i[i, j, 6] = f_star[i, j, 8]                  # Bounce
-    f_i[i, j, 7] = f_star[i, j, 5]                  # Bounce
-    f_i[i, j, 8] = f_star[i, j, 6]                  # Bounce
+    f_plus[i, j, 0] = f_star[i, j, 0]
+    f_plus[i, j, 1] = (f_star[i-1, j, 1] + f_star[i-1, j, 1]) / 2
+    f_plus[i, j, 2] = (f_star[i, j-1, 2] + f_star[i, j, 2]) / 2
+    f_plus[i, j, 3] = f_plus[i, j, 1]
+    f_plus[i, j, 4] = f_plus[i, j, 2]
+    f_plus[i, j, 5] = (f_star[i-1, j-1, 5] + f_star[i, j, 5]) / 2
+    f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i, j, 6]) / 2
+    f_plus[i, j, 7] = f_plus[i, j, 5]
+    f_plus[i, j, 8] = f_plus[i, j, 6]
 
-    return f_i
+    f_minus[i, j, 0] = 0
+    f_minus[i, j, 1] = (f_star[i-1, j, 1] - f_star[i-1, j, 1]) / 2
+    f_minus[i, j, 2] = (f_star[i, j-1, 2] - f_star[i, j, 2]) / 2
+    f_minus[i, j, 3] = -f_minus[i, j, 1]
+    f_minus[i, j, 4] = -f_minus[i, j, 2]
+    f_minus[i, j, 5] = (f_star[i-1, j-1, 5] - f_star[i, j, 5]) / 2
+    f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i, j, 6]) / 2
+    f_minus[i, j, 7] = -f_minus[i, j, 5]
+    f_minus[i, j, 8] = -f_minus[i, j, 6]
 
-def streaming(Nx, Ny, f_i, f_star):         # Function to access all streaming functions
-    f_i = fluid(Nx, Ny, f_i, f_star)
-    f_i = left_wall(Ny, f_i, f_star)
-    f_i = right_wall(Nx, Ny, f_i, f_star)
-    f_i = lower_wall(Nx, f_i, f_star)
-    f_i = upper_wall(Nx, Ny, f_i, f_star)
-    f_i = lower_left_corner(f_i, f_star)
-    f_i = lower_right_corner(Nx, f_i, f_star)
-    f_i = upper_left_corner(f_i, f_star)
-    f_i = upper_right_corner(f_i, f_star)
+    return f_plus, f_minus
 
-    return f_i
+def streaming(Nx, Ny, f_plus, f_minus, f_star):
+    f_plus, f_minus = fluid(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = left_wall(Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = right_wall(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = lower_wall(Nx, f_plus, f_minus, f_star)
+    f_plus, f_minus = upper_wall(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = lower_left_corner(f_plus, f_minus, f_star)
+    f_plus, f_minus = lower_right_corner(Nx, f_plus, f_minus, f_star)
+    f_plus, f_minus = upper_left_corner(f_plus, f_minus, f_star)
+    f_plus, f_minus = upper_right_corner(f_plus, f_minus, f_star)
+
+    return f_plus, f_minus
 
 @njit
 def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
@@ -319,22 +409,6 @@ def force_source(w_i, c_i, c_s, tau_plus, F):
         Si[:, :, i] = (tau_plus - 1/2) * w_i[i] * (u_dot_c[:, :] * Fi[:, :, i] / c_s**2 - u_dot_F) + (tau_minus - 1/2) * w_i[i] * Fi[:, :, i]   # Source term
 
     return Si
-
-@njit
-def decompose_f_i(q, f_plus, f_minus, f_i):
-    for i in range(q):                  # Decompose f_i for every direction
-        if i == 0:                      # If-statement for symmetry arguments
-            f_plus[:, :, i] = f_i[:, :, i]
-            f_minus[:, :, i] = 0
-        elif i in [1, 2, 5, 6]:
-            f_plus[:, :, i] = (f_i[:, :, i] + f_i[:, :, c_opp[i]]) / 2
-            f_minus[:, :, i] = f_i[:, :, i] - f_plus[:, :, i]
-        else:
-            f_plus[:, :, i] = f_plus[:, :, c_opp[i]]
-            f_minus[:, :, i] = -f_minus[:, :, c_opp[i]]
-
-    return f_plus, f_minus
-
 
 def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_C, T_dim_H, f_l_t_1, f_l_t_2):
     T_new = np.zeros((Nx+2, Ny+2))
@@ -389,24 +463,19 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_C, T_dim_H, f_l_t_1, 
     T_new[0, :] = 16/15 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
     T_new[-1, :] = 16/15 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-    # if (t % 2500 == 0):
-    # if t > 6350 and t < 6360:
-    #     easy_view(t, T_new / beta + T0)
+    # if (t>4290) and (t<4300):
     #     easy_view(t, f_l)
+    #     easy_view(t, T_new / beta + T0)
 
     return T_new, f_l, f_l_t_1
-
 
 # Buoyancy force
 F_buoy = - T_dim[1:-1, 1:-1, None] * g_sim
 
 # Initialize equilibrium function
 f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)
-f_i = f_plus + f_minus
 
 start = time.time()                 # Start timer
-
-f_star = np.zeros((Nx, Ny, q))      # Initialize f_star
 
 for t in range(Nt):
     B = (1 - f_l) * (tau_plus - 1/2) / (f_l + tau_plus - 1/2)               # Viscosity-dependent solid fraction
@@ -438,20 +507,12 @@ for t in range(Nt):
     # Collision step
     Si = force_source(w_i, c_i, c_s, tau_plus, F_buoy)          # Calculate source term
     Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)              # Repeat B in all directions to make next calc possible
-    # f_star = f_plus + f_minus + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_plus + f_minus) + (1-Bi) * Si
-    # if t > 1:
-    #     easy_view(t, T)
-    #     easy_view(t, f_plus[:, :, 1])
-    #     easy_view(t, Bi[:, :, 1])
-    #     easy_view(t, f_minus[:, :, 1])
-    #     easy_view(t, f_eq_plus[:, :, 1])
-    #     easy_view(t, f_eq_minus[:, :, 1])
 
+    # f_star = f_plus + f_minus + (1-Bi) * (-1 / tau_plus * (f_plus - f_eq_plus) - 1 / tau_minus * (f_minus - f_eq_minus)) + Bi * (f_plus - f_minus - f_plus + f_minus) + (1-Bi) * Si
     f_star = f_plus * (1 - (1-Bi) / tau_plus) + f_minus * (1 - 2*Bi - (1-Bi) / tau_minus) + f_eq_plus * (1-Bi) / tau_plus + f_eq_minus * (1-Bi) / tau_minus + Si * (1-Bi)
 
     # Streaming step
-    f_i = streaming(Nx, Ny, f_i, f_star)
-    f_plus, f_minus = decompose_f_i(q, f_plus, f_minus, f_i)
+    f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
 
     if (t % 10000 == 1):
         T = T_dim / beta + T0

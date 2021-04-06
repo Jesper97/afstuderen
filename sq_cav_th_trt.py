@@ -5,7 +5,7 @@ import plotly.figure_factory as ff
 import sys
 import time
 from matplotlib import cm
-from numba import jit
+from numba import njit
 
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
@@ -36,7 +36,7 @@ Ma = 0.1
 Lambda = 1/4
 tau_plus = 0.55
 rho0_sim = 1
-Ny = 50
+Ny = 40
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -92,7 +92,7 @@ def easy_view(nr, arr):
     dataset = pd.DataFrame(arr.T, index=idx, columns=col)
     print(nr, dataset)
 
-@jit
+@njit
 def fluid(Nx, Ny, f_plus, f_minus, f_star):
     for i in range(1, Nx-1):
         f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
@@ -127,7 +127,7 @@ def fluid(Nx, Ny, f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-@jit
+@njit
 def left_wall(Ny, f_plus, f_minus, f_star):
     i = 0
 
@@ -163,12 +163,12 @@ def left_wall(Ny, f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-@jit
+@njit
 def right_wall(Nx, Ny, f_plus, f_minus, f_star):
     i = Nx - 1
 
     f_plus[i, 1:Ny-1, 0] = f_star[i, 1:Ny-1, 0]
-    f_plus[i, 1:Ny-1, 1] = (f_star[i, 1:Ny-1, 3] + f_star[i+1, 1:Ny-1, 3]) / 2      # Bounce
+    f_plus[i, 1:Ny-1, 1] = (f_star[i-1, 1:Ny-1, 1] + f_star[i, 1:Ny-1, 1]) / 2      # Bounce
     f_plus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] + f_star[i, 2:Ny, 4]) / 2
     f_plus[i, 1:Ny-1, 3] = f_plus[i, 1:Ny-1, 1]
     f_plus[i, 1:Ny-1, 4] = f_plus[i, 1:Ny-1, 2]
@@ -178,7 +178,7 @@ def right_wall(Nx, Ny, f_plus, f_minus, f_star):
     f_plus[i, 1:Ny-1, 8] = f_plus[i, 1:Ny-1, 6]
 
     f_minus[i, 1:Ny-1, 0] = 0
-    f_minus[i, 1:Ny-1, 1] = (f_star[i, 1:Ny-1, 3] - f_star[i+1, 1:Ny-1, 3]) / 2     # Bounce
+    f_minus[i, 1:Ny-1, 1] = (f_star[i-1, 1:Ny-1, 1] - f_star[i, 1:Ny-1, 1]) / 2     # Bounce
     f_minus[i, 1:Ny-1, 2] = (f_star[i, 0:Ny-2, 2] - f_star[i, 2:Ny, 4]) / 2
     f_minus[i, 1:Ny-1, 3] = -f_minus[i, 1:Ny-1, 1]
     f_minus[i, 1:Ny-1, 4] = -f_minus[i, 1:Ny-1, 2]
@@ -199,7 +199,7 @@ def right_wall(Nx, Ny, f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-@jit
+@njit
 def lower_wall(Nx, f_plus, f_minus, f_star):
     j = 0
 
@@ -235,7 +235,7 @@ def lower_wall(Nx, f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-@jit
+@njit
 def upper_wall(Nx, Ny, f_plus, f_minus, f_star):
     j = Ny - 1
 
@@ -271,7 +271,7 @@ def upper_wall(Nx, Ny, f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-@jit
+@njit
 def lower_left_corner(f_plus, f_minus, f_star):
     i = 0
     j = 0
@@ -308,7 +308,7 @@ def lower_left_corner(f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-@jit
+@njit
 def lower_right_corner(Nx, f_plus, f_minus, f_star):
     i = Nx - 1
     j = 0
@@ -345,7 +345,7 @@ def lower_right_corner(Nx, f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-@jit
+@njit
 def upper_left_corner(f_plus, f_minus, f_star):
     i = 0
     j = Ny - 1
@@ -361,15 +361,15 @@ def upper_left_corner(f_plus, f_minus, f_star):
     f_plus[i, j, 8] = f_plus[i, j, 6]
 
     f_minus[i, j, 0] = 0
-    f_minus[i, j, 1] = (f_star[i, j, 3] + f_star[i+1, j, 3]) / 2
-    f_minus[i, j, 2] = (f_star[i, j-1, 2] + f_star[i, j, 2]) / 2
+    f_minus[i, j, 1] = (f_star[i, j, 3] - f_star[i+1, j, 3]) / 2
+    f_minus[i, j, 2] = (f_star[i, j-1, 2] - f_star[i, j, 2]) / 2
     f_minus[i, j, 3] = -f_minus[i, j, 1]
     f_minus[i, j, 4] = -f_minus[i, j, 2]
-    f_minus[i, j, 5] = (f_star[i, j, 7] + f_star[i, j, 5]) / 2
-    f_minus[i, j, 6] = (f_star[i+1, j-1, 6] + f_star[i, j, 6]) / 2
+    f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i, j, 5]) / 2
+    f_minus[i, j, 6] = (f_star[i+1, j-1, 6] - f_star[i, j, 6]) / 2
     f_minus[i, j, 7] = -f_minus[i, j, 5]
     f_minus[i, j, 8] = -f_minus[i, j, 6]
-
+    #
     # f_i[i, j, 0] = f_star[i, j, 0]
     # f_i[i, j, 1] = f_star[i, j, 3]                  # Bounce
     # f_i[i, j, 2] = f_star[i, j-1, 2]
@@ -382,7 +382,7 @@ def upper_left_corner(f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-@jit
+@njit
 def upper_right_corner(f_plus, f_minus, f_star):
     i = Nx - 1
     j = Ny - 1
@@ -398,12 +398,12 @@ def upper_right_corner(f_plus, f_minus, f_star):
     f_plus[i, j, 8] = f_plus[i, j, 6]
 
     f_minus[i, j, 0] = 0
-    f_minus[i, j, 1] = (f_star[i-1, j, 1] + f_star[i-1, j, 1]) / 2
-    f_minus[i, j, 2] = (f_star[i, j-1, 2] + f_star[i, j, 2]) / 2
+    f_minus[i, j, 1] = (f_star[i-1, j, 1] - f_star[i-1, j, 1]) / 2
+    f_minus[i, j, 2] = (f_star[i, j-1, 2] - f_star[i, j, 2]) / 2
     f_minus[i, j, 3] = -f_minus[i, j, 1]
     f_minus[i, j, 4] = -f_minus[i, j, 2]
-    f_minus[i, j, 5] = (f_star[i-1, j-1, 5] + f_star[i, j, 5]) / 2
-    f_minus[i, j, 6] = (f_star[i, j, 8] + f_star[i, j, 6]) / 2
+    f_minus[i, j, 5] = (f_star[i-1, j-1, 5] - f_star[i, j, 5]) / 2
+    f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i, j, 6]) / 2
     f_minus[i, j, 7] = -f_minus[i, j, 5]
     f_minus[i, j, 8] = -f_minus[i, j, 6]
 
@@ -419,7 +419,7 @@ def upper_right_corner(f_plus, f_minus, f_star):
 
     return f_plus, f_minus
 
-def streaming(Nx, Ny, f_plus, f_minus, f_star):
+def streaming(t, Nx, Ny, f_plus, f_minus, f_star):
     f_plus, f_minus = fluid(Nx, Ny, f_plus, f_minus, f_star)
     f_plus, f_minus = left_wall(Ny, f_plus, f_minus, f_star)
     f_plus, f_minus = right_wall(Nx, Ny, f_plus, f_minus, f_star)
@@ -430,9 +430,12 @@ def streaming(Nx, Ny, f_plus, f_minus, f_star):
     f_plus, f_minus = upper_left_corner(f_plus, f_minus, f_star)
     f_plus, f_minus = upper_right_corner(f_plus, f_minus, f_star)
 
+    # easy_view(t, f_plus[:, :, 1])
+    # easy_view(t, f_minus[:, :, 1])
+
     return f_plus, f_minus
 
-@jit
+@njit
 def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s, F):
     f_eq = np.zeros((Nx, Ny, q))
     f_eq_plus = np.zeros((Nx, Ny, q))
@@ -473,7 +476,7 @@ def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s, F):
 
     return f_eq_plus, f_eq_minus, Si
 
-@jit
+@njit
 def decompose_f_i(f_i):
     f_plus = np.zeros((Nx, Ny, q))
     f_minus = np.zeros((Nx, Ny, q))
@@ -533,7 +536,7 @@ F_buoy = - T_dim[:, :, None] * g_sim
 
 # Initialize equilibrium function
 f_plus, f_minus, Si = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s, F_buoy)
-# f_i = f_plus + f_minus
+f_i = f_plus + f_minus
 
 start = time.time()
 
@@ -563,7 +566,7 @@ for t in range(Nt):
     #     print(t, f_star[:, :, 1].T)
 
     # Streaming step
-    f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = streaming(t, Nx, Ny, f_plus, f_minus, f_star)
     # if t in [0, 1, 2, 3]:
     #     print(t, f_i[:, :, 1].T)
     # f_plus, f_minus = decompose_f_i(f_i)
@@ -610,7 +613,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'$u$ in pipe with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
 # plt.legend('Velocity vector')
-plt.savefig(f"Figures/flow_test/arrowplot_time{Time}_test2.png")
+plt.savefig(f"Figures/flow_test/arrowplot_time{Time}_test1.png")
 
 # Heatmaps
 plt.figure(2)
@@ -620,7 +623,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'$u_x$ in cavity with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
 plt.colorbar()
-plt.savefig(f"Figures/flow_test/heatmap_ux_time{Time}_test2.png")
+plt.savefig(f"Figures/flow_test/heatmap_ux_time{Time}_test1.png")
 
 # plt.figure(3)
 # plt.clf()

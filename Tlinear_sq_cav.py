@@ -15,7 +15,7 @@ folder_nr = 'water_Tlinear'
 L = 0.1             # Length of cavity (m)
 H = L               # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
-Time = 1000         # (s)
+Time = 50000         # (s)
 nu = 1e-6           # Kinematic viscosity (m^2/s)
 alpha = 1.44e-7     # Thermal diffusivity (m^2/s)
 lbda = 0.6          # Thermal conductivity (W/m K)
@@ -85,6 +85,7 @@ if alpha_sim > 1/6:
 # Calculate conversion parameters
 dx = H / Ny                                             # Distance
 dt = (c_s ** 2) * (tau_plus - 1 / 2) * ((dx ** 2) / nu)       # Time
+print(dx, dt)
 Cu = dx / dt                                            # Velocity
 Cg = dx / dt**2                                         # Acceleration
 Crho = rho0 / rho0_sim                                  # Density
@@ -412,7 +413,7 @@ def force_source(w_i, c_i, c_s, tau_plus, F):
 
     return Si
 
-def temperature(T_old, h_old, c_app_old, f_l_old, ux, uy, t, T_dim_C, T_dim_H):
+def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux, uy, t, T_dim_C, T_dim_H):
     T_new = np.zeros((Nx+2, Ny+2))
     f_l = f_l_old.copy()
     f_l_iter = -1
@@ -423,27 +424,24 @@ def temperature(T_old, h_old, c_app_old, f_l_old, ux, uy, t, T_dim_C, T_dim_H):
     Tl = Tm + epsilon
 
     h_s = c_s * Ts
-    h_l = (c_s + c_l) / 2 * (Tl - Ts) + h_s + Lat
-    print(h_s, h_l)
+    h_l = h_s + Lat # (c_s + c_l) / 2 * (Tl - Ts) +
+    # print(h_s, h_l)
 
-    T_iter = T_old / beta + T0
+    T_old = T_old_dim / beta + T0
+    T_iter = T_old_dim / beta + T0
     T_H = T_dim_H / beta + T0
     T_C = T_dim_C / beta + T0
     h_iter = h_old.copy()
     c_app_iter = c_app_old.copy()
 
     def energy_eq(i, j, T, ux, uy, c_app, h, h_old):
-        T_new = T[i, j] + (h[i-1, j-1] - h_old[i-1, j-1]) / c_app[i-1, j-1] \
-                - (c_p * dt / (c_app[i-1, j-1] * dx)) * (ux[i-1, j-1] * (T[i+1, j] - T[i-1, j] - 1 / 4 * (T[i+1, j+1] - T[i-1, j+1] + T[i+1, j-1] - T[i-1, j-1])) \
-                - uy[i-1, j-1] * (T[i, j+1] - T[i, j-1] - 1 / 4 * (T[i+1, j+1] - T[i+1, j-1] + T[i-1, j+1] - T[i-1, j-1]))) \
-                + (lbda * dt / (rho0 * c_app[i-1, j-1] * dx**2)) * (2 * (T[i+1, j] + T[i-1, j] + T[i, j+1] + T[i, j-1])
-                - 1 / 2 * (T[i+1, j+1] + T[i-1, j+1] + T[i+1, j-1] + T[i-1, j-1]) - 6 * T[i, j])
+        # T_new = T[i, j] - (h[i-1, j-1] - h_old[i-1, j-1]) / c_app[i-1, j-1] \
+        #         - (c_p * dt / (c_app[i-1, j-1] * dx)) * (ux[i-1, j-1] * (T[i+1, j] - T[i-1, j] - 1 / 4 * (T[i+1, j+1] - T[i-1, j+1] + T[i+1, j-1] - T[i-1, j-1])) \
+        #         + uy[i-1, j-1] * (T[i, j+1] - T[i, j-1] - 1 / 4 * (T[i+1, j+1] - T[i+1, j-1] + T[i-1, j+1] - T[i-1, j-1]))) \
+        #         + (lbda * dt / (rho0 * c_app[i-1, j-1] * dx**2)) * (2 * (T[i+1, j] + T[i-1, j] + T[i, j+1] + T[i, j-1])
+        #         - 1 / 2 * (T[i+1, j+1] + T[i-1, j+1] + T[i+1, j-1] + T[i-1, j-1]) - 6 * T[i, j])
 
-        # T_new = c_app_iter[i-1, j-1] / c_p * T_iter[i, j] - 1 / c_p * (h_iter[i-1, j-1] - h_old[i-1, j-1]) - \
-        #         ux[i-1, j-1] * (T_iter[i+1, j] - T_iter[i-1, j] - 1 / 4 * (T_iter[i+1, j+1] - T_iter[i-1, j+1] + T_iter[i+1, j-1] - T_iter[i-1, j-1])) \
-        #         - uy[i-1, j-1] * (T_iter[i, j+1] - T_iter[i, j-1] - 1 / 4 * (T_iter[i+1, j+1] - T_iter[i+1, j-1] + T_iter[i-1, j+1] - T_iter[i-1, j-1])) \
-        #         + alpha * (2 * (T_iter[i+1, j] + T_iter[i-1, j] + T_iter[i, j+1] + T_iter[i, j-1])
-        #         - 1 / 2 * (T_iter[i+1, j+1] + T_iter[i-1, j+1] + T_iter[i+1, j-1] + T_iter[i-1, j-1]) - 6 * T_iter[i, j])
+        T_new = T[i, j] - (h[i-1, j-1] - h_old[i-1, j-1]) / c_app[i-1, j-1] + (lbda * dt / (c_app[i-1, j-1] * rho0 * dx**2)) * (T[i+1, j] - 2 * T[i, j] + T[i-1, j])
 
         return T_new
     z = 1
@@ -454,17 +452,20 @@ def temperature(T_old, h_old, c_app_old, f_l_old, ux, uy, t, T_dim_C, T_dim_H):
 
         h_new = h_iter + c_app_iter * (T_new[1:-1, 1:-1] - T_iter[1:-1, 1:-1])
 
-        easy_view('T_new', T_new)
-        easy_view('h_new', h_new)
+        # print(t, z)
+        #
+        # easy_view('T_new', T_new)
+        # easy_view('c_app_iter', c_app_iter)
+        # easy_view('h_new', h_new)
 
         for j in range(1, Ny+1):
             for i in range(1, Nx+1):
                 if h_new[i-1, j-1] < h_s:
                     T_new[i, j] = h_new[i-1, j-1] / c_s
                 elif h_new[i-1, j-1] > h_l:
-                    T_new[i, j] = Tm - epsilon + (h_new[i-1, j-1] - (h_s + Lat)) / c_l
+                    T_new[i, j] = Tl + (h_new[i-1, j-1] - h_l) / c_l
                 else:
-                    T_new[i, j] = Tm + epsilon + 2 * epsilon * (h_new[i-1, j-1] - h_s) / Lat
+                    T_new[i, j] = Ts + ((h_new[i-1, j-1] - h_s) / (h_l - h_s)) * (Tl - Ts)
 
                 if T_new[i, j] < Ts:
                     c_app[i-1, j-1] = c_s
@@ -476,8 +477,9 @@ def temperature(T_old, h_old, c_app_old, f_l_old, ux, uy, t, T_dim_C, T_dim_H):
                     c_app[i-1, j-1] = c_s + (Lat / (Tl - Ts)) + (c_l - c_s) * (T_new[i, j] - Ts) / (Tl - Ts)
                     f_l[i-1, j-1] = (T_new[i, j] - Ts) / (Tl - Ts)
 
-        easy_view('T_new2', T_new)
-        easy_view('f_l', f_l)
+        # easy_view('T_new2', T_new)
+        # easy_view('c_app', c_app)
+        # easy_view('f_l', f_l)
 
         # Ghost nodes
         T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
@@ -486,9 +488,9 @@ def temperature(T_old, h_old, c_app_old, f_l_old, ux, uy, t, T_dim_C, T_dim_H):
         T_new[0, :] = 16/5 * T_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
         T_new[-1, :] = 16/5 * T_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-        easy_view(z, T_new)
-
         if np.any(abs(f_l - f_l_iter)) < 1e-6:
+            if z > 20:
+                print(z)
             break
         else:
             T_iter = T_new.copy()
@@ -498,10 +500,13 @@ def temperature(T_old, h_old, c_app_old, f_l_old, ux, uy, t, T_dim_C, T_dim_H):
 
         z += 1
 
-    # if t > 3000:
-    #     if (t % 400 == 0):
-    #         easy_view(t, T_new)
-    #         easy_view(t, f_l)
+        if z > 20:
+            print('No convergence')
+
+    if t > 60000:
+        if (t % 500 == 0):
+            easy_view(t, T_new)
+            easy_view(t, f_l)
 
     T_dim = beta * (T_new - T0)
 
@@ -553,7 +558,7 @@ for t in range(Nt):
     # Streaming step
     f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
 
-    if (t % 2000 == 1):
+    if (t % 30000 == 1):
         T = T_dim / beta + T0
 
         # Liquid fraction

@@ -32,7 +32,7 @@ folder_nr = 'gallium_Hsource'
 # umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Physical parameters gallium
-Time = 2000          # (s)
+Time = 200          # (s)
 L = 0.1             # Length of cavity (m)
 H = 0.714*L         # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
@@ -461,8 +461,10 @@ def temperature(T, alpha, Lat, c_p, beta, ux, uy, t, T_dim_C, T_dim_H, f_l_t_1, 
     T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
     T_new[1:-1, -1] = 21/23 * T_new[1:-1, -2] + 3/23 * T_new[1:-1, -3] - 1/23 * T_new[1:-1, -4]     # Neumann extrapolation on upper boundary
     # T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
-    T_new[0, :] = 16/15 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
-    T_new[-1, :] = 16/15 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
+    T_new[0, :] = 16/5 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
+    T_new[-1, :] = 16/5 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
+
+    # easy_view(t, T_new / beta + T0)
 
     # if (t>4290) and (t<4300):
     #     easy_view(t, f_l)
@@ -515,7 +517,7 @@ for t in range(Nt):
     # Streaming step
     f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
 
-    if (t % 4000 == 1):
+    if (t % 2000 == 1):
         T = T_dim / beta + T0
 
         # Liquid fraction

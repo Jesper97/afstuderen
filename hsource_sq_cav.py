@@ -73,7 +73,7 @@ nu_sim = c_s**2 * (tau_plus - 1 / 2)                    # Simulation viscosity
 print('nu_sim', nu_sim)
 
 # Determine dependent parameters
-umax_sim = Re * nu_sim / Ny                             # Maximal simulation density
+umax_sim = Re *   / Ny                             # Maximal simulation density
 print('umax_sim', umax_sim)
 tau_minus = dt_sim * (Lambda / (tau_plus / dt_sim - 1/2) + 1/2)
 alpha_sim = nu_sim / Pr

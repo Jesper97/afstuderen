@@ -11,19 +11,41 @@ np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 
 # Define constants
-# Physical parameters
-L = 0.0112            # m
-H = L            # m
-g = 9.81            # m/s^2
-Time = 10           # s
-nu = 1e-6           # m^2/s
-alpha = 1.44e-7     # m^2/s
-rho0 = 1e3          # kg/m^3
-beta = 210e-6       # 1/K
-T0 = 293            # K
-T_C = 288           # K
-T_H = 298           # K
-umax = np.sqrt(g * beta * (T_H - T0) * L)
+# # Physical parameters water
+# L = 0.1            # m
+# H = L            # m
+# g = 9.81            # m/s^2
+# Time = 10           # s
+# nu = 1e-6           # m^2/s
+# alpha = 1.44e-7     # m^2/s
+# rho0 = 1e3          # kg/m^3
+# beta = 210e-6       # 1/K
+# T0 = 293            # K
+# T_C = 288           # K
+# T_H = 298           # K
+# umax = np.sqrt(g * beta * (T_H - T0) * L)
+
+# Physical parameters gallium
+Time = 40         # (s)
+L = 0.1             # Length of cavity (m)
+H = L      # Height of cavity (m)
+g = 9.81            # Gravitational acceleration (m/s^2)
+rho0 = 6.093e3      # Density (kg/m^3)
+lbda = 33           # Thermal conductivity (W/m K)
+mu = 1.81e-3        # Dynamic viscosity (Ns/m^2)
+nu = mu / rho0      # Kinematic viscosity (m^2/s)
+beta = 1.2e-4       # Thermal expansion (1/K)
+Lat = 8.016e5       # Latent heat (J/kg)
+c_p = 381           # Specific heat (J/(kgK))
+alpha = lbda / (rho0 * c_p)     # Thermal diffusivity (m^2/s)
+Tm = 302.8          # Melting point (K)
+
+# Domain parameters
+T0 = 301.3          # Starting temperature (K)
+T_H = 311           # Hot wall temperature (K)
+T_C = 301.3         # Cold wall temperature (K)
+epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
+umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Dimensionless numbers
 Re = umax * H / nu
@@ -34,9 +56,9 @@ Ma = 0.1
 
 # Choose simulation parameters
 Lambda = 1/4
-tau_plus = 0.55
+tau_plus = 0.501
 rho0_sim = 1
-Ny = 40
+Ny = 50
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -606,14 +628,14 @@ T = T_dim / beta + T0
 # plt.legend('Velocity vector')
 # plt.savefig(f"Figures/flow_test/streamplot_time{Time}_test.png")
 
-# Vector plot
-plt.figure(np.int(t/200)+2, dpi=300)
-plt.quiver(Cu*ux.T, Cu*uy.T)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'$u$ in pipe with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
-# plt.legend('Velocity vector')
-plt.savefig(f"Figures/flow_test/arrowplot_time{Time}_test1.png")
+# # Vector plot
+# plt.figure(np.int(t/200)+2, dpi=300)
+# plt.quiver(Cu*ux.T, Cu*uy.T)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title(f'$u$ in pipe with left wall at $T={T_H}K$ and right wall at $T={T_C}K$')
+# # plt.legend('Velocity vector')
+# plt.savefig(f"Figures/flow_test/arrowplot_time{Time}_test1.png")
 
 # Heatmaps
 plt.figure(2)

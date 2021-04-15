@@ -8,14 +8,14 @@ from numba import njit
 
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
-folder_nr = 'gallium_Tlinear'
+folder_nr = 'test' #gallium_Tlinear'
 
-# # Define constants
+# Define constants
 # # Physical parameters water
 # L = 0.1             # Length of cavity (m)
 # H = L               # Height of cavity (m)
 # g = 9.81            # Gravitational acceleration (m/s^2)
-# Time = 20000         # (s)
+# Time = 400         # (s)
 # nu = 1e-6           # Kinematic viscosity (m^2/s)
 # alpha = 1.44e-7     # Thermal diffusivity (m^2/s)
 # lbda = 0.6          # Thermal conductivity (W/m K)
@@ -26,15 +26,15 @@ folder_nr = 'gallium_Tlinear'
 # Tm = 273.15         # Melting point (K)
 #
 # # Domain parameters
-# T0 = 272          # Starting temperature (K)
+# T0 = 275          # Starting temperature (K)
 # T_H = 285         # Hot wall temperature (K)
-# T_C = 272         # Hot wall temperature (K)
+# T_C = 275         # Hot wall temperature (K)
 # epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
 # umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Physical parameters gallium
 Time = 400         # (s)
-L = 0.0889             # Length of cavity (m)
+L = 0.1             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
 rho0 = 6.093e3      # Density (kg/m^3)
@@ -48,11 +48,12 @@ alpha = lbda / (rho0 * c_p)     # Thermal diffusivity (m^2/s)
 Tm = 302.8          # Melting point (K)
 
 # Domain parameters
-T0 = 301.3          # Starting temperature (K)
+T0 = 305 #301.3          # Starting temperature (K)
 T_H = 311           # Hot wall temperature (K)
-T_C = 301.3         # Cold wall temperature (K)
+T_C = 305 #301.3         # Cold wall temperature (K)
 epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
+print(umax)
 
 # Dimensionless numbers
 Re = umax * H / nu                                  # Reynolds number
@@ -63,7 +64,7 @@ Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.5005     # Even relaxation time
+tau_plus = 0.5002     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
 Ny = 40             # Nodes in y-direction
 
@@ -112,8 +113,8 @@ ux = np.zeros(dim)                 # Simulation velocity in x direction
 uy = np.zeros(dim)                 # Simulation velocity in y direction
 rho_sim = rho0_sim * np.ones(dim)  # Simulation density
 T_dim = np.zeros((Nx+2, Ny+2))     # Dimensionless simulation temperature
-f_l = np.zeros(dim)                # Liquid fraction
-h = c_p * T0 * np.ones(dim)        # Enthalpy
+f_l = np.ones(dim)  #np.zeros(dim)                # Liquid fraction
+h = (c_p * T0 + Lat) * np.ones(dim)        # Enthalpy
 c_app = c_p * np.ones(dim)
 
 # Temperature BCS
@@ -423,13 +424,15 @@ def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux_sim, uy_sim, t, T_dim_C
     Tl = Tm + epsilon
 
     h_s = c_s * Ts
-    h_l = h_s + Lat # + (c_s + c_l) / 2 * (Tl - Ts)
+    h_l = h_s + Lat + (c_s + c_l) / 2 * (Tl - Ts)
 
     T_H = T_dim_H / beta + T0
     T_C = T_dim_C / beta + T0
 
     ux = ux_sim * dx / dt
     uy = uy_sim * dx / dt
+
+    # easy_view(t, T_old_dim)
 
     def energy_eq(i, j, T, ux, uy, c_app, h, h_old):
         T_new = T[i, j] - (h[i-1, j-1] - h_old[i-1, j-1]) / c_app[i-1, j-1] \
@@ -509,18 +512,20 @@ def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux_sim, uy_sim, t, T_dim_C
         else:
             continue
 
-    if (t > 5300) and (t < 5350):
-        easy_view(t, uy_sim)
+    if t % 10 == 0:
+        print(t, np.amax(uy_sim))
+        # easy_view(t, uy_sim)
         # easy_view(t, ux_sim)
         # easy_view(t, T_new)
-
 
     if t % 100 == 0:
         print('t', t)
 
     T_dim = beta * (T_new - T0)
+    # easy_view(t, T_dim)
 
     return T_dim, h_new, c_app, f_l
+
 
 f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)          # Initialize distributions
 
@@ -529,6 +534,7 @@ start = time.time()
 for t in range(Nt):
     ### Forcing
     T_dim_phys = T_dim[1:-1, 1:-1]                                          # Select only physical domain w/out ghost nodes
+    # easy_view(t, T_dim_phys)
 
     if np.any(f_l[f_l == 1]):                                               # Check if at least one node is fully liquid
         T_dim_avg_l = np.mean(T_dim_phys[f_l == 1])                         # Take average of all liquid nodes
@@ -545,6 +551,7 @@ for t in range(Nt):
 
     ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
     uy[B == 1] = 0
+    # easy_view(t, B)
 
     ### Temperature
     T_dim, h, c_app, f_l = temperature(T_dim, h, c_app, f_l, ux, uy, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
@@ -563,7 +570,7 @@ for t in range(Nt):
     f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
 
     ### Plots
-    if (t % 10000 == 0):
+    if (t % 100 == 0):
         T = T_dim / beta + T0
 
         # Liquid fraction

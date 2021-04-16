@@ -8,6 +8,7 @@ from numba import njit
 
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
+pd.set_option('display.expand_frame_repr', False)
 folder_nr = 'test' #gallium_Tlinear'
 
 # Define constants
@@ -34,7 +35,7 @@ folder_nr = 'test' #gallium_Tlinear'
 
 # Physical parameters gallium
 Time = 400         # (s)
-L = 0.1             # Length of cavity (m)
+L = 0.0889             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
 rho0 = 6.093e3      # Density (kg/m^3)
@@ -64,7 +65,7 @@ Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.5002     # Even relaxation time
+tau_plus = 0.502     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
 Ny = 40             # Nodes in y-direction
 
@@ -100,12 +101,12 @@ w_i = np.array([4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36])
 q = 9                               # number of directions
 
 # Grid and time steps
-Nx = Ny                                 # Number of lattice nodes in x-direction
+Nx = np.int(H/dx)                                 # Number of lattice nodes in x-direction
 Nt = np.int(Time / dt)                  # Number of time steps
 print('Nt', Nt)
 
 # Forces
-g_sim = g / Cg * np.array([0, -1])      # Simulation acceleration vector
+g_sim = g / Cg * np.array([0, -1])   # Simulation acceleration vector
 
 # Initial conditions
 dim = (Nx, Ny)
@@ -113,8 +114,8 @@ ux = np.zeros(dim)                 # Simulation velocity in x direction
 uy = np.zeros(dim)                 # Simulation velocity in y direction
 rho_sim = rho0_sim * np.ones(dim)  # Simulation density
 T_dim = np.zeros((Nx+2, Ny+2))     # Dimensionless simulation temperature
-f_l = np.ones(dim)  #np.zeros(dim)                # Liquid fraction
-h = (c_p * T0 + Lat) * np.ones(dim)        # Enthalpy
+f_l = np.zeros(dim)                # Liquid fraction
+h = (c_p * T0) * np.ones(dim)        # Enthalpy
 c_app = c_p * np.ones(dim)
 
 # Temperature BCS
@@ -399,10 +400,12 @@ def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
 
     return f_eq_plus, f_eq_minus
 
-@njit
-def force_source(w_i, c_i, c_s, tau_plus, F):
+# @njit
+def force_source(ux, uy, F):
     Fi = np.zeros((Nx, Ny, q))                                              # Initialize forcing and source terms
     Si = np.zeros((Nx, Ny, q))
+    # easy_view("uy", uy)
+    # easy_view("F", F[:, :, 1])
 
     u_dot_F = ux * F[:, :, 0] + uy * F[:, :, 1]                             # Inner product of u with F
 
@@ -410,10 +413,11 @@ def force_source(w_i, c_i, c_s, tau_plus, F):
         u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]                           # Inner product of u with c_i
 
         Fi[:, :, i] = F[:, :, 0] * c_i[i, 0] + F[:, :, 1] * c_i[i, 1]       # Inner product of F with c_i
-        Si[:, :, i] = (tau_plus - 1/2) * w_i[i] * (u_dot_c[:, :] * Fi[:, :, i] / c_s**2 - u_dot_F) + (tau_minus - 1/2) * w_i[i] * Fi[:, :, i]   # Source term
+        Si[:, :, i] = (1 - 1/(2*tau_plus)) * w_i[i] * (u_dot_c[:, :] * Fi[:, :, i] / c_s**4 - u_dot_F / c_s**2) + (1 - 1/(2*tau_minus)) * w_i[i] * Fi[:, :, i] / c_s**2   # Source term
 
     return Si
 
+# @njit
 def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux_sim, uy_sim, t, T_dim_C, T_dim_H):
     T_new = np.zeros((Nx+2, Ny+2))
     l_relax = 1
@@ -512,7 +516,7 @@ def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux_sim, uy_sim, t, T_dim_C
         else:
             continue
 
-    if t % 10 == 0:
+    if t % 100 == 0:
         print(t, np.amax(uy_sim))
         # easy_view(t, uy_sim)
         # easy_view(t, ux_sim)
@@ -531,16 +535,22 @@ f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)          # In
 
 start = time.time()
 
+print(Cg)
+
 for t in range(Nt):
     ### Forcing
     T_dim_phys = T_dim[1:-1, 1:-1]                                          # Select only physical domain w/out ghost nodes
-    # easy_view(t, T_dim_phys)
+    # easy_view("T_dim_phys", T_dim_phys / beta + T0)
 
-    if np.any(f_l[f_l == 1]):                                               # Check if at least one node is fully liquid
-        T_dim_avg_l = np.mean(T_dim_phys[f_l == 1])                         # Take average of all liquid nodes
-        F_buoy = - (T_dim[1:-1, 1:-1, None] - T_dim_avg_l) * g_sim          # Calculate buoyancy force
-    else:
-        F_buoy = - T_dim[1:-1, 1:-1, None] * g_sim                          # Calculate buoyancy force
+    F_buoy = - 1 * (T_dim[1:-1, 1:-1, None] - np.mean(T_dim_phys)) * g_sim          # Calculate buoyancy force
+
+    # if np.any(f_l[f_l == 1]):                                               # Check if at least one node is fully liquid
+    #     T_dim_avg_l = np.mean(T_dim_phys[f_l == 1])                         # Take average of all liquid nodes
+    #     F_buoy = - (T_dim[1:-1, 1:-1, None] - T_dim_avg_l) * g_sim          # Calculate buoyancy force
+    # else:
+    #     F_buoy = - T_dim[1:-1, 1:-1, None] * g_sim                          # Calculate buoyancy force
+
+    # easy_view("F_buoy", F_buoy[:, :, 1])
 
     ### Moment update
     rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
@@ -560,7 +570,7 @@ for t in range(Nt):
     f_eq_plus, f_eq_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)                                # Calculate new equilibrium distribution
 
     ### Source
-    Si = force_source(w_i, c_i, c_s, tau_plus, F_buoy)                      # Calculate source term
+    Si = force_source(ux, uy, F_buoy)                      # Calculate source term
     Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)                          # Repeat B in all directions to make next calc possible
 
     ### Collision
@@ -570,7 +580,7 @@ for t in range(Nt):
     f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
 
     ### Plots
-    if (t % 100 == 0):
+    if (t % 3000 == 0):
         T = T_dim / beta + T0
 
         # Liquid fraction
@@ -580,7 +590,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'$f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_4.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_1.png")
 
         # Velocities
         plt.figure()
@@ -590,7 +600,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'$u_y$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_1.png")
 
         plt.figure()
         plt.clf()
@@ -599,7 +609,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'$u_x$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_1.png")
 
         ## Temperature heatmap
         plt.figure()
@@ -609,7 +619,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'$T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_4.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_1.png")
 
         # plt.figure()
         # plt.clf()
@@ -627,7 +637,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'$u$ in pipe with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         # plt.legend('Velocity vector')
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/arrowplot_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_4.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/arrowplot_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_1.png")
 
         plt.close('all')
 

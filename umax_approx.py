@@ -23,13 +23,11 @@ T0 = 305 #301.3          # Starting temperature (K)
 T_H = 311           # Hot wall temperature (K)
 T_C = 305 #301.3         # Cold wall temperature (K)
 epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
-umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
-# print(umax)
 
 # Dimensionless numbers
-Re = umax * H / nu                                  # Reynolds number
+# Re = umax * H / nu                                  # Reynolds number
 Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha)    # Rayleigh number
-print('Ra', Ra)
+print('Ra =', Ra)
 Pr = nu / alpha                                     # Prandtl number
 Ma = 0.1                                            # Mach number
 
@@ -53,9 +51,33 @@ def g(y):
 
 def equations(p):
     Nu, Re = p
-    return ((Nu - 1) * Ra * Pr**(-2) - c1 * abs(Re)**2 / sqrt(Re_L/abs(Re)) * (1 + sqrt(Re_L/abs(Re))**4)**(-1/4) - c2 * abs(Re)**3, \
-            Nu - 1 - c3 * abs(Re)**(1/2) * Pr**(1/2) * f(2*a*Nu/sqrt(Re_L) * sqrt(Re_L/abs(Re)) * (1 + sqrt(Re_L/abs(Re))**4)**(-1/4)) - c4 * Pr * abs(Re) * f(2*a*Nu/sqrt(Re_L) * sqrt(Re_L/abs(Re)) * (1 + sqrt(Re_L/abs(Re))**4)**(-1/4)))
+    return ((Nu - 1) * Ra * Pr**(-2) - c1 * abs(Re)**2 / g(Re_L/abs(Re)) - c2 * abs(Re)**3, \
+            Nu - 1 - c3 * abs(Re)**(1/2) * Pr**(1/2) * f(2*a*Nu/sqrt(Re_L) * g(Re_L/abs(Re))) - c4 * Pr * abs(Re) * f(2*a*Nu/sqrt(Re_L) * g(Re_L/abs(Re))))
 
-x, y =  fsolve(equations, (10, 5000))
+Nu, Re =  fsolve(equations, (5, 1500))
+print(Nu, Re)
 
-print(x, y)4
+umax = Re * H / rho0
+
+print("umax =", umax, "m/s")
+
+# Choose simulation parameters
+Lambda = 1/4        # Magic parameter
+tau_plus = 0.502   # Even relaxation time
+rho0_sim = 1        # Starting simulation density
+Ny = 40             # Nodes in y-direction
+
+dx_sim = 1          # simulation length
+dt_sim = 1          # simulation time
+c_s = (1 / np.sqrt(3)) * (dx_sim / dt_sim)              # Simulation speed of sound
+nu_sim = c_s**2 * (tau_plus - 1 / 2)                    # Simulation viscosity
+
+# Calculate conversion parameters
+dx = L / Ny                                             # Distance
+dt = (c_s ** 2) * (tau_plus - 1 / 2) * ((dx ** 2) / nu)       # Time
+print("dx =", dx, "dt =", dt)
+Cu = dx / dt                                            # Velocity
+
+umax_sim = umax / Cu
+
+print('umax_sim =', umax_sim)

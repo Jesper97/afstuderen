@@ -65,7 +65,7 @@ Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.501     # Even relaxation time
+tau_plus = 0.5005     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
 Nx = 40             # Nodes in y-direction
 Ny = np.int(0.714*Nx)
@@ -554,8 +554,8 @@ for t in range(Nt):
     ux = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0])    # Calculate x velocity (odd parts due to symmetry)
     uy = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1])    # Calculate y velocity (odd parts due to symmetry)
 
-    ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
-    uy[B == 1] = 0
+    # ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
+    # uy[B == 1] = 0
 
     ### Temperature
     ux_T = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim)    # Calculate x velocity (odd parts due to symmetry)

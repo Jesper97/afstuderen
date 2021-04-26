@@ -240,7 +240,6 @@ def upper_right_corner(Nx, Ny, f_plus, f_minus, f_star):
 @njit
 def left_wall_temp(Ny, g_plus, g_minus, g_star, w, T_H):
     i = 0
-    print(T_H)
 
     g_plus[i, 1:Ny-1, 0] = g_star[i, 1:Ny-1, 0]
     g_plus[i, 1:Ny-1, 1] = (-g_star[i, 1:Ny-1, 3] + g_star[i+1, 1:Ny-1, 3] + 2 * w[1] * T_H[1:Ny-1]) / 2      # Bounce

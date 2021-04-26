@@ -55,14 +55,13 @@ T_H = 311           # Hot wall temperature (K)
 T_C = 301.3         # Hot wall temperature (K)
 epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * H)           # Maximal velocity
-print(umax)
 
 # Dimensionless numbers
 Re = umax * H / nu                                  # Reynolds number
 Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha)    # Rayleigh number
 print('Ra', Ra)
 Pr = nu / alpha                                     # Prandtl number
-Ma = 0.1                                            # Mach number
+print('Pr', Pr)
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
@@ -165,7 +164,7 @@ def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
 
     return f_eq_plus, f_eq_minus
 
-# @njit
+@njit
 def force_source(ux, uy, F):
     Fi = np.zeros((Nx, Ny, q))                                              # Initialize forcing and source terms
     Si = np.zeros((Nx, Ny, q))
@@ -211,10 +210,10 @@ def temperature(T_old, f_l_old, ux_sim, uy_sim, t, T_dim_C, T_dim_H):
                     #               + (lbda * dt / (c_app[i-1, j-1] * rho0 * dx**2)) * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j]) \
                     #               - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
 
-                    T_new[i, j] = T_old[i, j] - (c_p * dt / (c_app[i-1, j-1] * dx) * (ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j]) \
-                                  + uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1])))\
-                                  + (lbda * dt / (c_app[i-1, j-1] * rho0 * dx**2)) * (T_old[i+1, j] - 2 * T_old[i, j] + T_old[i-1, j])\
-                                  - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
+                    # T_new[i, j] = T_old[i, j] - (c_p * dt / (c_app[i-1, j-1] * dx) * (ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j]) \
+                    #               + uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1])))\
+                    #               + (lbda * dt / (c_app[i-1, j-1] * rho0 * dx**2)) * (T_old[i+1, j] - 2 * T_old[i, j] + T_old[i-1, j])\
+                    #               - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
 
                     T_prime = Ts + (Tl - Ts) * f_l_iter[i-1, j-1]
                     f_l_new[i-1, j-1] = f_l_iter[i-1, j-1] + l_relax * c_p / Lat * (T_new[i, j] - T_prime)

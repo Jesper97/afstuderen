@@ -47,29 +47,28 @@ beta = 1.2e-4       # Thermal expansion (1/K)
 Lat = 8.016e5       # Latent heat (J/kg)
 c_p = 381           # Specific heat (J/(kgK))
 alpha = lbda / (rho0 * c_p)     # Thermal diffusivity (m^2/s)
-Tm = 302.8          # Melting point (K)
+Tm = 290 #302.8          # Melting point (K)
 
 # Domain parameters
-T0 = 301.3          # Starting temperature (K)
-T_H = 311           # Hot wall temperature (K)
-T_C = 301.3         # Hot wall temperature (K)
+T0 = 306 #301.3          # Starting temperature (K)
+T_H = 307           # Hot wall temperature (K)
+T_C = 305 #301.3         # Hot wall temperature (K)
 epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * H)           # Maximal velocity
-print(umax)
 
 # Dimensionless numbers
 Re = umax * H / nu                                  # Reynolds number
 Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha)    # Rayleigh number
 print('Ra', Ra)
-Pr = nu / alpha                                     # Prandtl number
-Ma = 0.1                                            # Mach number
+Pr = nu / alpha                                      # Prandtl number
+print('Pr', Pr)
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.5005     # Even relaxation time
+tau_plus = 0.501     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
 Nx = 20             # Nodes in y-direction
-Ny = np.int(0.714*Nx)
+Ny = Nx #np.int(0.714*Nx)
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -81,7 +80,12 @@ print('nu_sim', nu_sim)
 umax_sim = Re * nu_sim / Ny                             # Maximal simulation density
 print('umax_sim', umax_sim)
 tau_minus = dt_sim * (Lambda / (tau_plus / dt_sim - 1/2) + 1/2)
-alpha_sim = nu_sim / Pr
+tau_g_plus = nu_sim / (c_s**2 * Pr) + 1/2
+tau_g_minus = tau_g_plus / (2*tau_g_plus - 1)
+print('tau_g_plus', tau_g_plus)
+print('tau_g_minus', tau_g_minus)
+alpha_sim = (tau_g_plus - 1/2) * c_s**2
+print('alpha_sim', alpha_sim)
 
 # if alpha_sim > 1/6:
 #     print(f"alpha too large ({alpha_sim}), unstable temperature")
@@ -115,14 +119,14 @@ dim = (Nx, Ny)
 ux = np.zeros(dim)                 # Simulation velocity in x direction
 uy = np.zeros(dim)                 # Simulation velocity in y direction
 rho_sim = rho0_sim * np.ones(dim)  # Simulation density
-T_dim = np.zeros((Nx+2, Ny+2))     # Dimensionless simulation temperature
-f_l_ts = np.zeros(dim)                # Liquid fraction
+T_dim = np.zeros(dim)     # Dimensionless simulation temperature
+f_l_ts = np.ones(dim)                # Liquid fraction
 h = (c_p * T0) * np.ones(dim)        # Enthalpy
 c_app = c_p * np.ones(dim)
 
 # Temperature BCS
-T_dim_H = np.ones(Ny+2) * beta * (T_H - T0)
-T_dim_C = np.ones(Ny+2) * beta * (T_C - T0)
+T_dim_H = np.ones(Ny) * beta * (T_H - T0)
+T_dim_C = np.ones(Ny) * beta * (T_C - T0)
 
 def easy_view(nr, arr):
     idx = ["idx" for i in arr[1, :]]
@@ -143,6 +147,19 @@ def streaming(Nx, Ny, f_plus, f_minus, f_star):
     f_plus, f_minus = str.upper_right_corner(Nx, Ny, f_plus, f_minus, f_star)
 
     return f_plus, f_minus
+
+def streaming_temp(Nx, Ny, g_plus, g_minus, g_star, w_i, T_H, T_C):
+    g_plus, g_minus = str.fluid(Nx, Ny, g_plus, g_minus, g_star)
+    g_plus, g_minus = str.left_wall_temp(Ny, g_plus, g_minus, g_star, w_i, T_H)
+    g_plus, g_minus = str.right_wall_temp(Nx, Ny, g_plus, g_minus, g_star, w_i, T_C)
+    g_plus, g_minus = str.lower_wall(Nx, g_plus, g_minus, g_star)
+    g_plus, g_minus = str.upper_wall(Nx, Ny, g_plus, g_minus, g_star)
+    g_plus, g_minus = str.lower_left_corner_temp(g_plus, g_minus, g_star, w_i, T_H)
+    g_plus, g_minus = str.lower_right_corner_temp(Nx, g_plus, g_minus, g_star, w_i, T_C)
+    g_plus, g_minus = str.upper_left_corner_temp(Ny, g_plus, g_minus, g_star, w_i, T_H)
+    g_plus, g_minus = str.upper_right_corner_temp(Nx, Ny, g_plus, g_minus, g_star, w_i, T_C)
+
+    return g_plus, g_minus
 
 @njit
 def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
@@ -165,12 +182,31 @@ def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
 
     return f_eq_plus, f_eq_minus
 
-# @njit
+@njit
+def g_equilibrium(w_i, T, ux, uy, c_i, q, c_s):
+    g_eq_plus = np.zeros((Nx, Ny, q))                                   # Initialize even and odd parts of f_eq
+    g_eq_minus = np.zeros((Nx, Ny, q))
+
+    u_dot_u = ux**2 + uy**2                                             # Inner product of u with itself
+
+    for i in range(q):                                                  # Loop over all directions of Q
+        if i == 0:                                                      # If-statement for symmetry arguments
+            u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]                   # Inner product of u with c_i
+            g_eq_plus[:, :, i] = w_i[i] * T * (1 + (u_dot_c[:, :] / c_s**2) + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
+        elif i in [1, 2, 5, 6]:
+            u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
+            g_eq_plus[:, :, i] = w_i[i] * T * (1 + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))      # Even part of f_eq
+            g_eq_minus[:, :, i] = w_i[i] * T * (u_dot_c[:, :] / c_s**2)                                               # Odd part of f_eq
+        else:
+            g_eq_plus[:, :, i] = g_eq_plus[:, :, c_opp[i]]
+            g_eq_minus[:, :, i] = -g_eq_minus[:, :, c_opp[i]]
+
+    return g_eq_plus, g_eq_minus
+
+@njit
 def force_source(ux, uy, F):
     Fi = np.zeros((Nx, Ny, q))                                              # Initialize forcing and source terms
     Si = np.zeros((Nx, Ny, q))
-    # easy_view("uy", uy)
-    # easy_view("F", F[:, :, 1])
 
     u_dot_F = ux * F[:, :, 0] + uy * F[:, :, 1]                             # Inner product of u with F
 
@@ -182,76 +218,8 @@ def force_source(ux, uy, F):
 
     return Si
 
-@jit
-def temperature(T_old, f_l_old, ux_sim, uy_sim, t, T_dim_C, T_dim_H):
-    T_new = np.zeros((Nx+2, Ny+2))
-    n_iter_arr = np.zeros((Nx, Ny))
-    l_relax = 1.0
-
-    Ts = Tm - epsilon
-    Tl = Tm + epsilon
-
-    T_H = T_dim_H / beta + T0
-    T_C = T_dim_C / beta + T0
-
-    ux = ux_sim * dx / dt
-    uy = uy_sim * dx / dt
-
-    T_old = T_old / beta + T0
-    f_l_iter = f_l_old.copy()
-    f_l_new = f_l_old.copy()
-
-    for j in range(1, Ny+1):
-        for i in range(1, Nx+1):
-            while True:
-                n_iter = 1
-                while True:
-                    # T_new[i, j] = T_old[i, j] - (c_p * dt / (c_app[i-1, j-1] * dx) * (ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1])) \
-                    #               + uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))))\
-                    #               + (lbda * dt / (c_app[i-1, j-1] * rho0 * dx**2)) * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j]) \
-                    #               - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
-
-                    T_new[i, j] = T_old[i, j] - (c_p * dt / (c_app[i-1, j-1] * dx) * (ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j]) \
-                                  + uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1])))\
-                                  + (lbda * dt / (c_app[i-1, j-1] * rho0 * dx**2)) * (T_old[i+1, j] - 2 * T_old[i, j] + T_old[i-1, j])\
-                                  - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
-
-                    T_prime = Ts + (Tl - Ts) * f_l_iter[i-1, j-1]
-                    f_l_new[i-1, j-1] = f_l_iter[i-1, j-1] + l_relax * c_p / Lat * (T_new[i, j] - T_prime)
-                    f_l_new[i-1, j-1] = min(max(f_l_new[i-1, j-1], 0), 1)
-
-                    if (np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6) and (n_iter >= 3):
-                        n_iter_arr[i-1, j-1] = n_iter
-                        break
-                    # elif (n_iter > 100) and (l_relax == 1):
-                    #     l_relax = 0.1
-                    #     break
-                    else:
-                        f_l_iter[i-1, j-1] = f_l_new[i-1, j-1]
-
-                    n_iter += 1
-
-                if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6:
-                    break
-                else:
-                    continue
-
-    # Ghost nodes
-    T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
-    T_new[1:-1, -1] = 21/23 * T_new[1:-1, -2] + 3/23 * T_new[1:-1, -3] - 1/23 * T_new[1:-1, -4]     # Neumann extrapolation on upper boundary
-    T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
-    T_new[0, :] = 16/5 * T_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
-    # T_new[-1, :] = 16/5 * T_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
-
-    # if (t > 13500) and (t % 100 == 0):
-    #     print(t)
-
-    T_dim = beta * (T_new - T0)
-
-    return T_dim, f_l_new
-
-
 f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)          # Initialize distributions
+g_plus, g_minus = g_equilibrium(w_i, T_dim, ux, uy, c_i, q, c_s)
 
 start = time.time()
 
@@ -259,30 +227,41 @@ X_th = []
 X_sim = []
 t_phys = []
 
+Nt = 10
 for t in range(Nt):
     ### Forcing
-    T_dim_phys = T_dim[1:-1, 1:-1]                                          # Select only physical domain w/out ghost nodes
-
-    F_buoy = - (T_dim[1:-1, 1:-1, None] - np.mean(T_dim_phys)) * g_sim          # Calculate buoyancy force
+    F_buoy = - (T_dim[:, :, None] - np.mean(T_dim)) * g_sim          # Calculate buoyancy force
 
     ### Moment update
     rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
 
     B = (1 - f_l_ts) * (tau_plus - 1/2) / (f_l_ts + tau_plus - 1/2)               # Viscosity-dependent solid fraction
-    ux = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0])    # Calculate x velocity (odd parts due to symmetry)
-    uy = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1])    # Calculate y velocity (odd parts due to symmetry)
+    ux = 0 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0])    # Calculate x velocity (odd parts due to symmetry)
+    uy = 0 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1])    # Calculate y velocity (odd parts due to symmetry)
 
     ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
     uy[B == 1] = 0
 
-    ux_T = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim)    # Calculate x velocity (odd parts due to symmetry)
-    uy_T = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim)    # Calculate y velocity (odd parts due to symmetry)
-
-    ux_T[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
-    uy_T[B == 1] = 0
+    if t % 1 == 0:
+        easy_view(t, T_dim / beta + T0)
+    # easy_view(t, g_plus[:, :, 1])
+    # easy_view(t, g_minus[:, :, 1])
 
     ### Temperature
-    T_dim, f_l_ts = temperature(T_dim, f_l_ts, ux_T, uy_T, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
+    g_eq_plus, g_eq_minus = g_equilibrium(w_i, T_dim, ux, uy, c_i, q, c_s)                                # Calculate new equilibrium distribution
+        #
+        # easy_view(t, g_eq_plus[:, :, 1])
+        # easy_view(t, g_eq_minus[:, :, 1])
+
+    g_star = g_plus + g_minus - (g_plus - g_eq_plus) / tau_g_plus - (g_minus - g_eq_minus) / tau_g_minus
+    g_plus, g_minus = streaming_temp(Nx, Ny, g_plus, g_minus, g_star, w_i, T_dim_H, T_dim_C)
+
+    T_dim = np.sum(g_plus, axis=2)
+
+    # T_dim[0, 0] = T_dim[0, 1]
+    # T_dim[0, -1] = T_dim[0, -2]
+    # T_dim[-1, 0] = T_dim[-1, 1]
+    # T_dim[-1, -1] = T_dim[-1, -2]
 
     ### Equilibrium
     f_eq_plus, f_eq_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)                                # Calculate new equilibrium distribution
@@ -297,35 +276,33 @@ for t in range(Nt):
     ### Streaming
     f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
 
-    if t % 2500 == 0:
-        print(t)
-
     # ### Plots
-    if (t % 15000 == 0):
-        ### Moment update
-        rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
-
-        B = (1 - f_l_ts) * (tau_plus - 1/2) / (f_l_ts + tau_plus - 1/2)               # Viscosity-dependent solid fraction
-        ux = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim)    # Calculate x velocity (odd parts due to symmetry)
-        uy = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim)    # Calculate y velocity (odd parts due to symmetry)
-
-        ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
-        uy[B == 1] = 0
-
+    if (t % 5000 == 0):
         T = T_dim / beta + T0
+        x = np.linspace(L/Nx/2, L-L/Nx/2, len(T[5, :]))
 
-        easy_view(t, T)
-        easy_view(t, f_l_ts)
-        easy_view(t, uy)
+        # ### Moment update
+        # rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
+        #
+        # B = (1 - f_l_ts) * (tau_plus - 1/2) / (f_l_ts + tau_plus - 1/2)               # Viscosity-dependent solid fraction
+        # ux = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim)    # Calculate x velocity (odd parts due to symmetry)
+        # uy = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim)    # Calculate y velocity (odd parts due to symmetry)
+        #
+        # ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
+        # uy[B == 1] = 0
 
-        # Liquid fraction
-        plt.figure()
-        plt.imshow(f_l_ts.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-        plt.xlabel('$x$ (# lattice nodes)')
-        plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_test.png")
+        # easy_view(t, T)
+        # easy_view(t, f_l_ts)
+        # easy_view(t, uy)
+
+        # # Liquid fraction
+        # plt.figure()
+        # plt.imshow(f_l_ts.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+        # plt.xlabel('$x$ (# lattice nodes)')
+        # plt.ylabel('$y$ (# lattice nodes)')
+        # plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        # plt.colorbar()
+        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_test.png")
 
         # Velocities
         plt.figure()
@@ -346,15 +323,24 @@ for t in range(Nt):
         # plt.colorbar()
         # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test.png")
 
-        # ## Temperature heatmap
+        ## Temperature heatmap
+        plt.figure()
+        plt.clf()
+        plt.imshow(np.flip(T[1:-1, 1:-1].T, axis=0), cmap=cm.Blues)
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'Gallium \n $T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.colorbar()
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test.png")
+
+        # ## Temperature lineplot
         # plt.figure()
-        # plt.clf()
-        # plt.imshow(np.flip(T[1:-1, 1:-1].T, axis=0), cmap=cm.Blues)
-        # plt.xlabel('$x$ (# lattice nodes)')
-        # plt.ylabel('$y$ (# lattice nodes)')
+        # plt.plot(T[5, :], x)
+        # plt.xlabel('$x$ (m)')
+        # plt.ylabel('$T$ (K)')
         # plt.title(f'Gallium \n $T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test.png")
+        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/lineplot_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test.png")
+
 
         # plt.figure()
         # plt.clf()
@@ -377,26 +363,26 @@ for t in range(Nt):
         plt.close('all')
 
 
-# Make arrays from lists
-t_phys = np.array(t_phys)
-X_th = np.array(X_th)
-X_sim = np.array(X_sim)
-plt.figure()
-plt.plot(X_th, t_phys)
-plt.plot(X_sim, t_phys)
-plt.xlabel('$x$ (m)')
-plt.ylabel('$t$ (s)')
-plt.title(f'Gallium \n Position of melting front, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_adv_form.png")
-
-# Liquid fraction
-plt.figure()
-plt.imshow(f_l_ts.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-plt.xlabel('$x$ (# lattice nodes)')
-plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-plt.colorbar()
-plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_adv_form.png")
+# # Make arrays from lists
+# t_phys = np.array(t_phys)
+# X_th = np.array(X_th)
+# X_sim = np.array(X_sim)
+# plt.figure()
+# plt.plot(X_th, t_phys)
+# plt.plot(X_sim, t_phys)
+# plt.xlabel('$x$ (m)')
+# plt.ylabel('$t$ (s)')
+# plt.title(f'Gallium \n Position of melting front, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+# plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_adv_form.png")
+#
+# # Liquid fraction
+# plt.figure()
+# plt.imshow(f_l_ts.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+# plt.xlabel('$x$ (# lattice nodes)')
+# plt.ylabel('$y$ (# lattice nodes)')
+# plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+# plt.colorbar()
+# plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_adv_form.png")
 
 stop = time.time()
 print(stop-start)

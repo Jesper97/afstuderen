@@ -67,7 +67,7 @@ Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.51     # Even relaxation time
+tau_plus = 0.54     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
 Nx = 20             # Nodes in y-direction
 Ny = 5 #np.int(0.714*Nx)
@@ -274,6 +274,7 @@ X_th = []
 X_sim = []
 t_phys = []
 
+Nt = 10
 for t in range(Nt):
     ### Forcing
     T_dim_phys = T_dim[1:-1, 1:-1]                                          # Select only physical domain w/out ghost nodes
@@ -283,6 +284,8 @@ for t in range(Nt):
 
     ### Temperature
     T_dim, f_l_ts = temperature(T_dim, f_l_ts, ux, uy, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
+
+    print(T_dim / beta + T0)
 
     ### Plots
     if (t % 1000 == 0):

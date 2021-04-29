@@ -130,7 +130,7 @@ def upper_wall(Nx, Ny, f_plus, f_minus, f_star):
     return f_plus, f_minus
 
 @njit
-def lower_left_corner(f_plus, f_minus, f_star):
+def lower_left_corner(f_plus, f_minus, f_star, w):
     i = 0
     j = 0
 
@@ -140,6 +140,7 @@ def lower_left_corner(f_plus, f_minus, f_star):
     f_plus[i, j, 3] = f_plus[i, j, 1]
     f_plus[i, j, 4] = f_plus[i, j, 2]
     f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i+1, j+1, 7]) / 2
+    # f_plus[i, j, 6] = (w[6] + w[8]) / 2
     f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i, j, 6]) / 2
     f_plus[i, j, 7] = f_plus[i, j, 5]
     f_plus[i, j, 8] = f_plus[i, j, 6]
@@ -151,13 +152,14 @@ def lower_left_corner(f_plus, f_minus, f_star):
     f_minus[i, j, 4] = -f_minus[i, j, 2]
     f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i+1, j+1, 7]) / 2
     f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i, j, 6]) / 2
+    # f_minus[i, j, 6] = (w[8] - w[6]) / 2
     f_minus[i, j, 7] = -f_minus[i, j, 5]
     f_minus[i, j, 8] = -f_minus[i, j, 6]
 
     return f_plus, f_minus
 
 @njit
-def lower_right_corner(Nx, f_plus, f_minus, f_star):
+def lower_right_corner(Nx, f_plus, f_minus, f_star, w):
     i = Nx - 1
     j = 0
 
@@ -167,6 +169,7 @@ def lower_right_corner(Nx, f_plus, f_minus, f_star):
     f_plus[i, j, 3] = f_plus[i, j, 1]
     f_plus[i, j, 4] = f_plus[i, j, 2]
     f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i, j, 5]) / 2
+    # f_plus[i, j, 5] = (w[7] + w[5]) / 2
     f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i-1, j+1, 8]) / 2
     f_plus[i, j, 7] = f_plus[i, j, 5]
     f_plus[i, j, 8] = f_plus[i, j, 6]
@@ -177,6 +180,7 @@ def lower_right_corner(Nx, f_plus, f_minus, f_star):
     f_minus[i, j, 3] = -f_minus[i, j, 1]
     f_minus[i, j, 4] = -f_minus[i, j, 2]
     f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i, j, 5]) / 2
+    # f_plus[i, j, 5] = (w[7] - w[5]) / 2
     f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i-1, j+1, 8]) / 2
     f_minus[i, j, 7] = -f_minus[i, j, 5]
     f_minus[i, j, 8] = -f_minus[i, j, 6]
@@ -184,7 +188,7 @@ def lower_right_corner(Nx, f_plus, f_minus, f_star):
     return f_plus, f_minus
 
 @njit
-def upper_left_corner(Ny, f_plus, f_minus, f_star):
+def upper_left_corner(Ny, f_plus, f_minus, f_star, w):
     i = 0
     j = Ny - 1
 
@@ -194,6 +198,7 @@ def upper_left_corner(Ny, f_plus, f_minus, f_star):
     f_plus[i, j, 3] = f_plus[i, j, 1]
     f_plus[i, j, 4] = f_plus[i, j, 2]
     f_plus[i, j, 5] = (f_star[i, j, 7] + f_star[i, j, 5]) / 2
+    # f_plus[i, j, 5] = (w[7] + w[5]) / 2
     f_plus[i, j, 6] = (f_star[i+1, j-1, 6] + f_star[i, j, 6]) / 2
     f_plus[i, j, 7] = f_plus[i, j, 5]
     f_plus[i, j, 8] = f_plus[i, j, 6]
@@ -204,6 +209,7 @@ def upper_left_corner(Ny, f_plus, f_minus, f_star):
     f_minus[i, j, 3] = -f_minus[i, j, 1]
     f_minus[i, j, 4] = -f_minus[i, j, 2]
     f_minus[i, j, 5] = (f_star[i, j, 7] - f_star[i, j, 5]) / 2
+    # f_plus[i, j, 5] = (w[7] - w[5]) / 2
     f_minus[i, j, 6] = (f_star[i+1, j-1, 6] - f_star[i, j, 6]) / 2
     f_minus[i, j, 7] = -f_minus[i, j, 5]
     f_minus[i, j, 8] = -f_minus[i, j, 6]
@@ -211,7 +217,7 @@ def upper_left_corner(Ny, f_plus, f_minus, f_star):
     return f_plus, f_minus
 
 @njit
-def upper_right_corner(Nx, Ny, f_plus, f_minus, f_star):
+def upper_right_corner(Nx, Ny, f_plus, f_minus, f_star, w):
     i = Nx - 1
     j = Ny - 1
 
@@ -221,6 +227,7 @@ def upper_right_corner(Nx, Ny, f_plus, f_minus, f_star):
     f_plus[i, j, 3] = f_plus[i, j, 1]
     f_plus[i, j, 4] = f_plus[i, j, 2]
     f_plus[i, j, 5] = (f_star[i-1, j-1, 5] + f_star[i, j, 5]) / 2
+    # f_plus[i, j, 6] = (w[6] + w[8]) / 2
     f_plus[i, j, 6] = (f_star[i, j, 8] + f_star[i, j, 6]) / 2
     f_plus[i, j, 7] = f_plus[i, j, 5]
     f_plus[i, j, 8] = f_plus[i, j, 6]
@@ -232,6 +239,7 @@ def upper_right_corner(Nx, Ny, f_plus, f_minus, f_star):
     f_minus[i, j, 4] = -f_minus[i, j, 2]
     f_minus[i, j, 5] = (f_star[i-1, j-1, 5] - f_star[i, j, 5]) / 2
     f_minus[i, j, 6] = (f_star[i, j, 8] - f_star[i, j, 6]) / 2
+    # f_minus[i, j, 6] = (w[8] - w[6]) / 2
     f_minus[i, j, 7] = -f_minus[i, j, 5]
     f_minus[i, j, 8] = -f_minus[i, j, 6]
 

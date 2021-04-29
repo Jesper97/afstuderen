@@ -18,7 +18,7 @@ folder_nr = 'test2'
 # L = 0.1             # Length of cavity (m)
 # H = L               # Height of cavity (m)
 # g = 9.81            # Gravitational acceleration (m/s^2)
-# Time = 400         # (s)
+# Time = 100         # (s)
 # nu = 1e-6           # Kinematic viscosity (m^2/s)
 # alpha = 1.44e-7     # Thermal diffusivity (m^2/s)
 # lbda = 0.6          # Thermal conductivity (W/m K)
@@ -36,7 +36,7 @@ folder_nr = 'test2'
 # umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Physical parameters gallium
-Time = 200 #1080         # (s)
+Time = 100 #1080         # (s)
 L = 0.0889             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
@@ -66,9 +66,9 @@ print('Pr', Pr)
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.501     # Even relaxation time
+tau_plus = 0.503     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Nx = 20             # Nodes in y-direction
+Nx = 40             # Nodes in y-direction
 Ny = Nx #np.int(0.714*Nx)
 
 dx_sim = 1          # simulation length
@@ -80,12 +80,12 @@ print('nu_sim', nu_sim)
 # Determine dependent parameters
 umax_sim = Re * nu_sim / Ny                             # Maximal simulation density
 print('umax_sim', umax_sim)
-tau_minus = dt_sim * (Lambda / (tau_plus / dt_sim - 1/2) + 1/2)
+tau_minus = Lambda / (tau_plus - 1/2) + 1/2
 tau_g_minus = nu_sim / (c_s**2 * Pr) + 1/2
 tau_g_plus = tau_g_minus / (2*tau_g_minus - 1)
 print('tau_g_plus', tau_g_plus)
 print('tau_g_minus', tau_g_minus)
-alpha_sim = (tau_g_plus - 1/2) * c_s**2
+alpha_sim = (tau_g_minus - 1/2) * c_s**2
 print('alpha_sim', alpha_sim)
 
 # if alpha_sim > 1/6:
@@ -105,7 +105,7 @@ Ch = dx**2 / dt**2                                      # Specific enthalpy
 c_i = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]], dtype=np.int)
 c_opp = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], dtype=np.int)
 w_i = np.array([4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36])
-w_temp = np.array([0, 1/4, 1/4, 1/4, 1/4])
+w_temp = np.array([1/5, 1/5, 1/5, 1/5, 1/5])
 q = 9                               # number of directions velocity
 q_temp = 5                          # Number of directions temperature
 
@@ -138,16 +138,16 @@ def easy_view(nr, arr):
     dataset = pd.DataFrame(arr.T, index=idx, columns=col)
     print(nr, dataset)
 
-def streaming(Nx, Ny, f_plus, f_minus, f_star):
+def streaming(Nx, Ny, f_plus, f_minus, f_star, w):
     f_plus, f_minus = str.fluid(Nx, Ny, f_plus, f_minus, f_star)
     f_plus, f_minus = str.left_wall(Ny, f_plus, f_minus, f_star)
     f_plus, f_minus = str.right_wall(Nx, Ny, f_plus, f_minus, f_star)
     f_plus, f_minus = str.lower_wall(Nx, f_plus, f_minus, f_star)
     f_plus, f_minus = str.upper_wall(Nx, Ny, f_plus, f_minus, f_star)
-    f_plus, f_minus = str.lower_left_corner(f_plus, f_minus, f_star)
-    f_plus, f_minus = str.lower_right_corner(Nx, f_plus, f_minus, f_star)
-    f_plus, f_minus = str.upper_left_corner(Ny, f_plus, f_minus, f_star)
-    f_plus, f_minus = str.upper_right_corner(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = str.lower_left_corner(f_plus, f_minus, f_star, w)
+    f_plus, f_minus = str.lower_right_corner(Nx, f_plus, f_minus, f_star, w)
+    f_plus, f_minus = str.upper_left_corner(Ny, f_plus, f_minus, f_star, w)
+    f_plus, f_minus = str.upper_right_corner(Nx, Ny, f_plus, f_minus, f_star, w)
 
     return f_plus, f_minus
 
@@ -230,10 +230,10 @@ X_th = []
 X_sim = []
 t_phys = []
 
-Nt = 1000
+# Nt2 = 2000
 for t in range(Nt):
     ### Forcing
-    F_buoy = - (T_dim[:, :, None] - np.mean(T_dim)) * g_sim          # Calculate buoyancy force
+    F_buoy = - 1 * (T_dim[:, :, None]) * g_sim          # Calculate buoyancy force
 
     ### Moment update
     rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
@@ -245,14 +245,11 @@ for t in range(Nt):
     ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
     uy[B == 1] = 0
 
-    if t % 100 == 0:
-        easy_view(t, T_dim / beta + T0)
-        # easy_view(t, f_l_ts)
-        easy_view(t, uy)
-
     ### Temperature
     g_eq_plus, g_eq_minus = g_equilibrium(w_temp, T_dim, ux, uy, c_i, q_temp, c_s)                                # Calculate new equilibrium distribution
     g_star = g_plus + g_minus - (g_plus - g_eq_plus) / tau_g_plus - (g_minus - g_eq_minus) / tau_g_minus
+    # g_star = g_plus + g_minus - (g_plus + g_minus - (g_eq_plus + g_eq_minus)) / 0.7 # tau_g_minus
+
     g_plus, g_minus = streaming_temp(Nx, Ny, g_plus, g_minus, g_star, w_temp, T_dim_H, T_dim_C)
 
     T_dim = np.sum(g_plus, axis=2)
@@ -266,12 +263,13 @@ for t in range(Nt):
 
     ### Collision
     f_star = f_plus * (1 - (1-Bi) / tau_plus) + f_minus * (1 - 2*Bi - (1-Bi) / tau_minus) + f_eq_plus * (1-Bi) / tau_plus + f_eq_minus * (1-Bi) / tau_minus + Si * (1-Bi)
+    # f_star = f_plus + f_minus - (f_plus - )
 
     ### Streaming
-    f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
+    f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star, w_i)
 
     # ### Plots
-    if t % 100 == 0:
+    if t % 16000 == 0:
         T = T_dim / beta + T0
         x = np.linspace(L/Nx/2, L-L/Nx/2, len(T[5, :]))
 
@@ -284,10 +282,6 @@ for t in range(Nt):
         #
         # ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
         # uy[B == 1] = 0
-
-        easy_view(t, T)
-        # easy_view(t, f_l_ts)
-        easy_view(t, uy)
 
         # # Liquid fraction
         # plt.figure()

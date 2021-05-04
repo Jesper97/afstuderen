@@ -5,8 +5,8 @@ import math
 sqrt = np.emath.sqrt
 
 Time = 400          # (s)
-L = 0.1             # Length of cavity (m)
-H = 0.714*L         # Height of cavity (m)
+L = 1/2 * 0.0889             # Length of cavity (m)
+H = 0.01 #0.714*L         # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
 rho0 = 6.093e3      # Density (kg/m^3)
 lbda = 33           # Thermal conductivity (W/m K)
@@ -54,7 +54,7 @@ def equations(p):
     return ((Nu - 1) * Ra * Pr**(-2) - c1 * abs(Re)**2 / g(Re_L/abs(Re)) - c2 * abs(Re)**3, \
             Nu - 1 - c3 * abs(Re)**(1/2) * Pr**(1/2) * f(2*a*Nu/sqrt(Re_L) * g(Re_L/abs(Re))) - c4 * Pr * abs(Re) * f(2*a*Nu/sqrt(Re_L) * g(Re_L/abs(Re))))
 
-Nu, Re =  fsolve(equations, (5, 1500))
+Nu, Re = fsolve(equations, (5, 1500))
 print(Nu, Re)
 
 umax = Re * H / rho0
@@ -63,7 +63,7 @@ print("umax =", umax, "m/s")
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.502   # Even relaxation time
+tau_plus = 0.51   # Even relaxation time
 rho0_sim = 1        # Starting simulation density
 Ny = 40             # Nodes in y-direction
 

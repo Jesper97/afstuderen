@@ -161,7 +161,7 @@ def upper_wall_temp(Nx, Ny, g_plus, g_minus, g_star):
     g[1:Nx-1, j, 0] = g_star[1:Nx-1, j, 0]
     g[1:Nx-1, j, 1] = g_star[0:Nx-2, j, 1]
     g[1:Nx-1, j, 2] = g_star[1:Nx-1, j-1, 2]      # Bounce
-    g[1:Nx-1, j, 3] = g_star[2:Nx, j, 1]
+    g[1:Nx-1, j, 3] = g_star[2:Nx, j, 3]
     g[1:Nx-1, j, 4] = g_star[1:Nx-1, j, 2]
 
     # g_plus[1:Nx-1, j, 0] = g_star[1:Nx-1, j, 0]

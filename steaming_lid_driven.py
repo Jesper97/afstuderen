@@ -419,7 +419,7 @@ def upper_left_corner(Ny, f_plus, f_minus, f_star, rho, w, c_s, c, uxw, uyw):
     f[i, j, 1] = f_star[i, j, 3]
     f[i, j, 2] = f_star[i, j-1, 2]
     f[i, j, 3] = f_star[i+1, j, 3]
-    f[i, j, 4] = f_star[i, j, 2]- 2 * w[2] * rho[i, j] / c_s**2 * (uxw * c[2, 0] + uyw * c[2, 1])
+    f[i, j, 4] = f_star[i, j, 2] - 2 * w[2] * rho[i, j] / c_s**2 * (uxw * c[2, 0] + uyw * c[2, 1])
     f[i, j, 5] = f_star[i, j, 7]
     f[i, j, 6] = f_star[i+1, j-1, 6]
     f[i, j, 7] = f_star[i, j, 5] - 2 * w[5] * rho[i, j] / c_s**2 * (uxw * c[5, 0] + uyw * c[5, 1])

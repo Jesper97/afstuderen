@@ -12,7 +12,7 @@ from numba import njit, jit
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
-folder_nr = 'lid_driven_cavity'
+folder_nr = 'lid_driven_cavity/test2'
 
 # Define constants
 # # Physical parameters water
@@ -38,7 +38,7 @@ folder_nr = 'lid_driven_cavity'
 
 # Physical parameters gallium
 Time = 40 #1080         # (s)
-L = 0.06 #0.0889             # Length of cavity (m)
+L = 0.1 #0.06 #0.0889             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
 rho0 = 6.093e3      # Density (kg/m^3)
@@ -63,11 +63,10 @@ Re = umax * H / nu                                  # Reynolds number
 Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha)    # Rayleigh number
 print('Ra', Ra)
 Pr = nu / alpha                                      # Prandtl number
-print('Pr', Pr)
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.51     # Even relaxation time
+tau_plus = 0.505      # Even relaxation time
 rho0_sim = 1        # Starting simulation density
 Nx = 40             # Nodes in y-direction
 Ny = Nx #np.int(0.714*Nx)
@@ -90,7 +89,6 @@ tau_g_plus = Lambda / (tau_g_minus - 1/2) + 1/2
 print('tau_g_plus', tau_g_plus)
 print('tau_g_minus', tau_g_minus)
 alpha_sim = (tau_g_minus - 1/2) * c_s**2
-print('alpha_sim', alpha_sim)
 
 # if alpha_sim > 1/6:
 #     print(f"alpha too large ({alpha_sim}), unstable temperature")
@@ -130,12 +128,39 @@ f_l_ts = np.ones(dim)                # Liquid fraction
 h = (c_p * T0) * np.ones(dim)        # Enthalpy
 c_app = c_p * np.ones(dim)
 
+# Collision operators
+M_rho = np.ones(9)
+M_e = np.array([-4, -1, -1, -1, -1, 2, 2, 2, 2])
+M_eps = np.array([4, -2, -2, -2, -2, 1, 1, 1, 1])
+M_jx = np.array([0, 1, 0, -1, 0, 1, -1, -1, 1])
+M_qx = np.array([0, -2, 0, 2, 0, 1, -1, -1, 1])
+M_jy = np.array([0, 0, 1, 0, -1, 1, 1, -1, -1])
+M_qy = np.array([0, 0, -2, 0, 2, 1, 1, -1, -1])
+M_pxx = np.array([0, 1, -1, 1, -1, 0, 0, 0, 0])
+M_pyy = np.array([0, 0, 0, 0, 0, 1, -1, 1, -1])
+M = np.array([M_rho, M_e, M_eps, M_jx, M_qx, M_jy, M_qy, M_pxx, M_pyy])
+M_inv = np.dot(M.T, np.linalg.inv(np.dot(M, M.T)))
+
+s0 = 0
+s1 = 1.64
+s2 = 1.2
+s3 = 0
+s7 = 1 / tau_plus
+s4 = 8 * ((2 - s7) / (8 - s7))
+s5 = 0
+s6 = s4
+s8 = s7
+S = np.diag(np.array([s0, s1, s2, s3, s4, s5, s6, s7, s8]))
+
 # Temperature BCS
 T_dim_H = np.zeros(Ny) * beta * (T_H - T0)
 T_dim_C = np.zeros(Ny) * beta * (T_C - T0)
 
-uxw = 0.1
+uxw = 0.00833
 uyw = 0
+
+Re2 = uxw * Nx / nu_sim
+print("Re", Re2)
 
 def easy_view(nr, arr):
     idx = ["idx" for i in arr[1, :]]
@@ -171,23 +196,48 @@ def streaming_temp(Nx, Ny, g_plus, g_minus, g_star, w, T_H, T_C):
     return g_plus, g_minus
 
 @njit
-def f_equilibrium(w_i, rho, ux, uy, c_i, q, c_s):
+def f_equilibrium(w_i, rho_, ux, uy, c_i, q, c_s):
     f_eq_plus = np.zeros((Nx, Ny, q))                                   # Initialize even and odd parts of f_eq
     f_eq_minus = np.zeros((Nx, Ny, q))
+    ####
+    f_eq = np.zeros((Nx, Ny, q))
 
     u_dot_u = ux**2 + uy**2                                             # Inner product of u with itself
 
     for i in range(q):                                                  # Loop over all directions of Q
-        if i == 0:                                                      # If-statement for symmetry arguments
-            u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]                   # Inner product of u with c_i
-            f_eq_plus[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :] / c_s**2) + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
-        elif i in [1, 2, 5, 6]:
-            u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
-            f_eq_plus[:, :, i] = w_i[i] * rho * (1 + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))      # Even part of f_eq
-            f_eq_minus[:, :, i] = w_i[i] * rho * (u_dot_c[:, :] / c_s**2)                                               # Odd part of f_eq
-        else:
-            f_eq_plus[:, :, i] = f_eq_plus[:, :, c_opp[i]]
-            f_eq_minus[:, :, i] = -f_eq_minus[:, :, c_opp[i]]
+        # if i == 0:                                                      # If-statement for symmetry arguments
+        #     u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]                   # Inner product of u with c_i
+        #     f_eq_plus[:, :, i] = w_i[i] * rho_ * (1 + (u_dot_c[:, :] / c_s**2) + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))
+        # elif i in [1, 2, 5, 6]:
+        #     u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
+        #     f_eq_plus[:, :, i] = w_i[i] * rho_ * (1 + (u_dot_c[:, :]**2 / (2 * c_s**4)) - (u_dot_u / (2 * c_s**2)))      # Even part of f_eq
+        #     f_eq_minus[:, :, i] = w_i[i] * rho_ * (u_dot_c[:, :] / c_s**2)                                               # Odd part of f_eq
+        # else:
+        #     f_eq_plus[:, :, i] = f_eq_plus[:, :, c_opp[i]]
+        #     f_eq_minus[:, :, i] = -f_eq_minus[:, :, c_opp[i]]
+
+        u_dot_c = ux * c_i[i, 0] + uy * c_i[i, 1]
+        f_eq[:, :, i] = w_i[i] * rho_[:, :] * (1 + u_dot_c[:, :] / c_s**2 + u_dot_c[:, :]**2 / (2 * c_s**4) - u_dot_u / (2 * c_s**2))
+
+    f_eq_plus[:, :, 0] = f_eq[:, :, 0]
+    f_eq_plus[:, :, 1] = (f_eq[:, :, 1] + f_eq[:, :, 3]) / 2
+    f_eq_plus[:, :, 2] = (f_eq[:, :, 2] + f_eq[:, :, 4]) / 2
+    f_eq_plus[:, :, 3] = (f_eq[:, :, 3] + f_eq[:, :, 1]) / 2
+    f_eq_plus[:, :, 4] = (f_eq[:, :, 4] + f_eq[:, :, 2]) / 2
+    f_eq_plus[:, :, 5] = (f_eq[:, :, 5] + f_eq[:, :, 7]) / 2
+    f_eq_plus[:, :, 6] = (f_eq[:, :, 6] + f_eq[:, :, 8]) / 2
+    f_eq_plus[:, :, 7] = (f_eq[:, :, 7] + f_eq[:, :, 5]) / 2
+    f_eq_plus[:, :, 8] = (f_eq[:, :, 8] + f_eq[:, :, 6]) / 2
+
+    f_eq_minus[:, :, 0] = 0
+    f_eq_minus[:, :, 1] = (f_eq[:, :, 1] - f_eq[:, :, 3]) / 2
+    f_eq_minus[:, :, 2] = (f_eq[:, :, 2] - f_eq[:, :, 4]) / 2
+    f_eq_minus[:, :, 3] = (f_eq[:, :, 3] - f_eq[:, :, 1]) / 2
+    f_eq_minus[:, :, 4] = (f_eq[:, :, 4] - f_eq[:, :, 2]) / 2
+    f_eq_minus[:, :, 5] = (f_eq[:, :, 5] - f_eq[:, :, 7]) / 2
+    f_eq_minus[:, :, 6] = (f_eq[:, :, 6] - f_eq[:, :, 8]) / 2
+    f_eq_minus[:, :, 7] = (f_eq[:, :, 7] - f_eq[:, :, 5]) / 2
+    f_eq_minus[:, :, 8] = (f_eq[:, :, 8] - f_eq[:, :, 6]) / 2
 
     return f_eq_plus, f_eq_minus
 
@@ -245,7 +295,9 @@ def force_source(ux, uy, F):
 
     return Si
 
+
 f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)          # Initialize distributions
+f_i = f_plus + f_minus
 g_plus, g_minus = g_equilibrium(w_temp, T_dim, ux, uy, c_i, q_temp, c_s)
 
 start = time.time()
@@ -254,21 +306,22 @@ X_th = []
 X_sim = []
 t_phys = []
 
-# Nt2 = 10
+Nt2 = 3
+tau_minus = tau_plus
 for t in range(Nt):
+    stri = f"{t}"
+
     ### Forcing
-    F_buoy = - 1 * T_dim[:, :, None] * g_sim          # Calculate buoyancy force
+    F_buoy = - 0 * T_dim[:, :, None] * g_sim          # Calculate buoyancy force
 
     ### Moment update
-    # rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
+    rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
     f = f_plus + f_minus
-    rho_sim = f[:, :, 0] + f[:, :, 1] + f[:, :, 2] + f[:, :, 3] + f[:, :, 4] + \
-        + f[:, :, 5] + f[:, :, 6] + f[:, :, 7] + f[:, :, 8]
 
     B = (1 - f_l_ts) * (tau_plus - 1/2) / (f_l_ts + tau_plus - 1/2)               # Viscosity-dependent solid fraction
-    # ux = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0])    # Calculate x velocity (odd parts due to symmetry)
-    # uy = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1])    # Calculate y velocity (odd parts due to symmetry)
-
+    # ux = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim)  # + (1 - B[:, :]) / 2 * F_buoy[:, :, 0])    # Calculate x velocity (odd parts due to symmetry)
+    # uy = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim)  # + (1 - B[:, :]) / 2 * F_buoy[:, :, 1])    # Calculate y velocity (odd parts due to symmetry)
+    #
     ux = (f[:, :, 1] + f[:, :, 5] + f[:, :, 8] - (f[:, :, 3] + f[:, :, 6] + f[:, :, 7])) / rho_sim
     uy = (f[:, :, 2] + f[:, :, 5] + f[:, :, 6] - (f[:, :, 4] + f[:, :, 7] + f[:, :, 8])) / rho_sim
 
@@ -276,58 +329,65 @@ for t in range(Nt):
     uy[B == 1] = 0
 
     ### Temperature
-    g_eq_plus, g_eq_minus = g_equilibrium(w_temp, T_dim, ux, uy, c_i, q_temp, c_s)                                # Calculate new equilibrium distribution
-
-    g_star = g_plus + g_minus - (g_plus - g_eq_plus) / tau_g_plus - (g_minus - g_eq_minus) / tau_g_minus
-    # g_star = g_plus + g_minus - (g_plus + g_minus - (g_eq_plus + g_eq_minus)) / tau_g_minus
-
-    g_plus, g_minus = streaming_temp(Nx, Ny, g_plus, g_minus, g_star, w_temp, T_dim_H, T_dim_C)
-
-    T_dim = np.sum(g_plus, axis=2)
+    # g_eq_plus, g_eq_minus = g_equilibrium(w_temp, T_dim, ux, uy, c_i, q_temp, c_s)                                # Calculate new equilibrium distribution
+    #
+    # g_star = g_plus + g_minus - (g_plus - g_eq_plus) / tau_g_plus - (g_minus - g_eq_minus) / tau_g_minus
+    # # g_star = g_plus + g_minus - (g_plus + g_minus - (g_eq_plus + g_eq_minus)) / tau_g_minus
+    #
+    # g_plus, g_minus = streaming_temp(Nx, Ny, g_plus, g_minus, g_star, w_temp, T_dim_H, T_dim_C)
+    #
+    # T_dim = np.sum(g_plus, axis=2)
 
     ### Equilibrium
     f_eq_plus, f_eq_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)                                # Calculate new equilibrium distribution
+    f_eq = f_eq_plus + f_eq_minus
 
     ### Source
-    Si = force_source(ux, uy, F_buoy)                      # Calculate source term
-    Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)                          # Repeat B in all directions to make next calc possible
+    # Si = 0 * force_source(ux, uy, F_buoy)                      # Calculate source term
+    # Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)                          # Repeat B in all directions to make next calc possible
 
     ### Collision
-    # f_star = f_plus * (1 - (1-Bi) / tau_plus) + f_minus * (1 - 2*Bi - (1-Bi) / tau_minus) + f_eq_plus * (1-Bi) / tau_plus + f_eq_minus * (1-Bi) / tau_minus + Si * (1-Bi)
-    # f_star = f_plus + f_minus - (f_plus + f_minus - (f_eq_plus + f_eq_minus)) / 0.7 + Si #tau_plus
-    f_star = f_plus + f_minus - (f_plus - f_eq_plus) / tau_plus - (f_minus - f_eq_minus) / tau_minus + Si
+    Mf = np.einsum('ij,klj->kli', M, f_i - f_eq)
+    SMf = np.einsum('ij,klj->kli', S, Mf)
+    MSMf = np.einsum('ij,klj->kli', M_inv, SMf)
+
+    f_star = f_i - MSMf
+    # f_star = f_i - 1/tau_plus * (f_plus - f_eq_plus) - 1/tau_minus * (f_minus - f_eq_minus)
 
     ### Streaming
     f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star, rho_sim, w_i, c_s, c_i, uxw, uyw)
-    # streaming(Nx, Ny, f_plus, f_minus, f_star, rhow, w, c_s, c, uxw, uyw)
+    f_i = f_plus + f_minus
 
-    if t % 250 == 0:
-        print(t, np.max(uy))
+    if t % 100 == 0:
+        print(np.max(ux))
 
-    if t % 6300 == 0 and t != 0:
+    if t % 350 == 0 and t != 0:
         T = T_dim / beta + T0
         x = np.linspace(L/Nx/2, L-L/Nx/2, len(T[5, :]))
-        # easy_view(t, np.flip(T_dim, axis=1) / beta + T0)
-        # easy_view(t, uy)
-        # print(np.max(uy))
 
-        # ## Temperature heatmap
-        # plt.figure()
-        # plt.clf()
-        # plt.imshow(np.flip(T.T, axis=0), cmap=cm.Blues)
-        # plt.xlabel('$x$ (# lattice nodes)')
-        # plt.ylabel('$y$ (# lattice nodes)')
-        # plt.title(f'Gallium \n $T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test1.png")
+        # List of points in x axis
+        XPoints = []
 
-        # ## Temperature lineplot
-        # plt.figure()
-        # plt.plot(x, T[:, 5])
-        # plt.xlabel('$x$ (m)')
-        # plt.ylabel('$T$ (K)')
-        # plt.title(f'Gallium \n $T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/lineplot_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test1.png")
+        # List of points in y axis
+        YPoints = []
+
+        # X and Y points are from -6 to +6 varying in steps of 2
+        vals = np.linspace(0, 0.1, Nx)
+        for val in vals:
+            XPoints.append(val)
+            YPoints.append(val)
+
+        # Provide a title for the contour plot
+        plt.figure()
+        plt.title('Streamplot velocity')
+        plt.xlabel('x')
+        plt.ylabel('y')
+        v = ux**2 + uy**2
+        x = np.linspace(0, 1, Nx)
+        y = np.linspace(0, 1, Ny)
+        X, Y = np.meshgrid(x, y)
+        plt.streamplot(X, Y, ux.T, uy.T)
+        plt.savefig(f"Figures/{folder_nr}/contour_plot_u_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test10.png")
 
         # Velocities
         plt.figure()
@@ -335,27 +395,27 @@ for t in range(Nt):
         plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
         plt.xlabel('$x$ (# lattice nodes)')
         plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'Gallium \n $u_y$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.title(f'Lid-driven cavity, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_test1.png")
+        plt.savefig(f"Figures/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_test10.png")
 
         plt.figure()
         plt.clf()
         plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
         plt.xlabel('$x$ (# lattice nodes)')
         plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'Gallium \n $u_x$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.title(f'Lid-driven cavity, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test1.png")
+        plt.savefig(f"Figures/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test10.png")
 
         # Vector plot
         plt.figure()
         plt.quiver(Cu*ux.T, Cu*uy.T)
         plt.xlabel('$x$ (# lattice nodes)')
         plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'Gallium \n $u$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.title(f'Lid-driven cavity, $t={np.round(t/Nt*Time, decimals=2)}s$')
         # plt.legend('Velocity vector')
-        plt.savefig(f"Figures/{folder_nr}/arrowplot_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test1.png")
+        plt.savefig(f"Figures/{folder_nr}/arrowplot_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test10.png")
 
         plt.close('all')
 
@@ -456,15 +516,46 @@ for val in vals:
     XPoints.append(val)
     YPoints.append(val)
 
+ux_aslan = np.array([[0, -0.0034965034965035446],
+                    [-0.15774647887323945, 0.04265734265734267],
+                    [-0.2676056338028169, 0.08671328671328671],
+                    [-0.3549295774647887, 0.1286713286713288],
+                    [-0.3830985915492957, 0.16643356643356655],
+                    [-0.3464788732394366, 0.21678321678321688],
+                    [-0.2788732394366197, 0.2734265734265735],
+                    [-0.2084507042253521, 0.34055944055944065],
+                    [-0.14366197183098584, 0.4118881118881119],
+                    [-0.07605633802816902, 0.48531468531468536],
+                    [0, 0.5566433566433566],
+                    [0.07887323943661972, 0.6300699300699302],
+                    [0.13239436619718314, 0.6846153846153846],
+                    [0.21408450704225357, 0.755944055944056],
+                    [0.2985915492957747, 0.8188811188811189],
+                    [0.3661971830985915, 0.8755244755244757],
+                    [0.41408450704225364, 0.9300699300699302],
+                    [0.5042253521126763, 0.9594405594405595],
+                    [0.5943661971830987, 0.96993006993007],
+                    [0.7070422535211267, 0.9783216783216784],
+                    [0.8140845070422535, 0.9888111888111889],
+                    [0.9352112676056339, 0.9972027972027973]])
+y = np.linspace(0, Nx, Nx)
+print(y)
+
+plt.figure()
+plt.title('$u_x at $x=L/2$')
+plt.xlabel('$u_x/u_0')
+plt.ylabel('$y/H$')
+plt.plot(ux[np.int(Nx/2), :], )
+
 # # Provide a title for the contour plot
 # plt.figure()
 # plt.title('Contour plot')
 # plt.xlabel('x')
 # plt.ylabel('y')
-# v = ux**2 + uy**2
+# v = (ux**2 + uy**2) / uxw
 # contours = plt.contour(XPoints, YPoints, v.T)
 # plt.clabel(contours, inline=1, fontsize=10)
-# plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/contour_plot_u_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test5.png")
+# plt.savefig(f"Figures/{folder_nr}/contour_plot_u_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test10.png")
 #
 # plt.figure()
 # contours = plt.contour(XPoints, YPoints, T[:, :].T)

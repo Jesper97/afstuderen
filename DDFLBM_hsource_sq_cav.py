@@ -38,7 +38,7 @@ folder_nr = 'test3'
 
 # Physical parameters gallium
 Time = 40 #1080         # (s)
-L = 0.06 #0.0889             # Length of cavity (m)
+L = 0.0889             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
 rho0 = 6.093e3      # Density (kg/m^3)
@@ -66,7 +66,7 @@ Pr = nu / alpha                                      # Prandtl number
 print('Pr', Pr)
 
 # Choose simulation parameters
-Lambda = 1/4        # Magic parameter
+Lambda = 1/6        # Magic parameter
 tau_plus = 0.51     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
 Nx = 160             # Nodes in y-direction
@@ -314,7 +314,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'Gallium \n $T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test11.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test12.png")
 
         # ## Temperature lineplot
         # plt.figure()
@@ -332,7 +332,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'Gallium \n $u_y$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_test11.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_test12.png")
 
         # Vector plot
         plt.figure()
@@ -341,7 +341,7 @@ for t in range(Nt):
         plt.ylabel('$y$ (# lattice nodes)')
         plt.title(f'Gallium \n $u$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
         # plt.legend('Velocity vector')
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/arrowplot_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test11.png")
+        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/arrowplot_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test12.png")
 
         plt.close('all')
 

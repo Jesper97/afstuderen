@@ -1,4 +1,7 @@
 from numba import njit
+import numpy as np
+
+q = 9
 
 @njit
 def fluid(Nx, Ny, f_plus, f_minus, f_star):

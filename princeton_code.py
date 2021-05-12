@@ -39,10 +39,10 @@ plotRealTime = False     # switch on for plotting as the simulation goes along
 # print(Nt)
 
 ### Free parameters
-Re_lbm      = 1000.0
+Re_lbm      = 3200.0
 u_lbm       = 0.05
 L_lbm       = 102
-t_max       = 5.0
+t_max       = 20.0
 
 # Deduce other parameters
 cs          = 1.0/math.sqrt(3.0)
@@ -50,6 +50,7 @@ Nx          = L_lbm - 2
 Ny = Nx
 nu_sim      = u_lbm*(L_lbm-2)/Re_lbm
 tau_plus    = 0.5 + nu_sim/(cs**2)
+tau = tau_plus
 rho0     = 1.0
 dt          = Re_lbm*nu_sim/L_lbm**2
 Nt      = math.floor(t_max/dt)
@@ -69,29 +70,30 @@ copp = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], dtype=int)
 
 weights = np.array([4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36])  # sums to 1
 
-# # Collision operators
-# M_rho = np.ones(9)
-# M_e = np.array([-4, -1, -1, -1, -1, 2, 2, 2, 2])
-# M_eps = np.array([4, -2, -2, -2, -2, 1, 1, 1, 1])
-# M_jx = np.array([0, 1, 0, -1, 0, 1, -1, -1, 1])
-# M_qx = np.array([0, -2, 0, 2, 0, 1, -1, -1, 1])
-# M_jy = np.array([0, 0, 1, 0, -1, 1, 1, -1, -1])
-# M_qy = np.array([0, 0, -2, 0, 2, 1, 1, -1, -1])
-# M_pxx = np.array([0, 1, -1, 1, -1, 0, 0, 0, 0])
-# M_pyy = np.array([0, 0, 0, 0, 0, 1, -1, 1, -1])
-# M = np.array([M_rho, M_e, M_eps, M_jx, M_qx, M_jy, M_qy, M_pxx, M_pyy])
-# M_inv = np.dot(M.T, np.linalg.inv(np.dot(M, M.T)))
-#
-# s0 = 0
-# s1 = 1.64
-# s2 = 1.2
-# s3 = 0
-# s7 = 1 / tau_plus
-# s4 = 8 * ((2 - s7) / (8 - s7))
-# s5 = 0
-# s6 = s4
-# s8 = s7
-# S = np.diag(np.array([s0, s1, s2, s3, s4, s5, s6, s7, s8]))
+# Collision operators
+M_rho = np.ones(9)
+M_e = np.array([-4, -1, -1, -1, -1, 2, 2, 2, 2])
+M_eps = np.array([4, -2, -2, -2, -2, 1, 1, 1, 1])
+M_jx = np.array([0, 1, 0, -1, 0, 1, -1, -1, 1])
+M_qx = np.array([0, -2, 0, 2, 0, 1, -1, -1, 1])
+M_jy = np.array([0, 0, 1, 0, -1, 1, 1, -1, -1])
+M_qy = np.array([0, 0, -2, 0, 2, 1, 1, -1, -1])
+M_pxx = np.array([0, 1, -1, 1, -1, 0, 0, 0, 0])
+M_pyy = np.array([0, 0, 0, 0, 0, 1, -1, 1, -1])
+M = np.array([M_rho, M_e, M_eps, M_jx, M_qx, M_jy, M_qy, M_pxx, M_pyy])
+M_inv = np.dot(M.T, np.linalg.inv(np.dot(M, M.T)))
+
+
+s0 = 0
+s1 = 1.64
+s2 = 1.2
+s3 = 0
+s7 = 1 / tau_plus
+s4 = 8 * ((2 - s7) / (8 - s7))
+s5 = 0
+s6 = s4
+s8 = s7
+S = np.diag(np.array([s0, s1, s2, s3, s4, s5, s6, s7, s8]))
 
 uxw = u_lbm
 uyw = 0
@@ -102,32 +104,32 @@ print("Re", Re2)
 @njit
 def feq_func(rho_, u_x, u_y, idxs, cxs, cys, weights, c_opp):
     feq = np.zeros((Ny, Nx, NL))
-    feq_minus = np.zeros((Ny, Nx, NL))
-    feq_plus = np.zeros((Ny, Nx, NL))
+    # feq_minus = np.zeros((Ny, Nx, NL))
+    # feq_plus = np.zeros((Ny, Nx, NL))
 
     for i, cx, cy, w in zip(idxs, cxs, cys, weights):
         feq[:, :, i] = rho_ * w * (1 + 3 * (cx * u_x + cy * u_y) + 9 * (cx * u_x + cy * u_y) ** 2 / 2 - 3 * (u_x ** 2 + u_y ** 2) / 2)
 
-    feq_plus[:, :, 0] = feq[:, :, 0]
-    feq_plus[:, :, 1] = (feq[:, :, 1] + feq[:, :, 3]) / 2
-    feq_plus[:, :, 2] = (feq[:, :, 2] + feq[:, :, 4]) / 2
-    feq_plus[:, :, 3] = (feq[:, :, 3] + feq[:, :, 1]) / 2
-    feq_plus[:, :, 4] = (feq[:, :, 4] + feq[:, :, 2]) / 2
-    feq_plus[:, :, 5] = (feq[:, :, 5] + feq[:, :, 7]) / 2
-    feq_plus[:, :, 6] = (feq[:, :, 6] + feq[:, :, 8]) / 2
-    feq_plus[:, :, 7] = (feq[:, :, 7] + feq[:, :, 5]) / 2
-    feq_plus[:, :, 8] = (feq[:, :, 8] + feq[:, :, 6]) / 2
-    feq_minus[:, :, 0] = 0
-    feq_minus[:, :, 1] = (feq[:, :, 1] - feq[:, :, 3]) / 2
-    feq_minus[:, :, 2] = (feq[:, :, 2] - feq[:, :, 4]) / 2
-    feq_minus[:, :, 3] = (feq[:, :, 3] - feq[:, :, 1]) / 2
-    feq_minus[:, :, 4] = (feq[:, :, 4] - feq[:, :, 2]) / 2
-    feq_minus[:, :, 5] = (feq[:, :, 5] - feq[:, :, 7]) / 2
-    feq_minus[:, :, 6] = (feq[:, :, 6] - feq[:, :, 8]) / 2
-    feq_minus[:, :, 7] = (feq[:, :, 7] - feq[:, :, 5]) / 2
-    feq_minus[:, :, 8] = (feq[:, :, 8] - feq[:, :, 6]) / 2
+    # feq_plus[:, :, 0] = feq[:, :, 0]
+    # feq_plus[:, :, 1] = (feq[:, :, 1] + feq[:, :, 3]) / 2
+    # feq_plus[:, :, 2] = (feq[:, :, 2] + feq[:, :, 4]) / 2
+    # feq_plus[:, :, 3] = (feq[:, :, 3] + feq[:, :, 1]) / 2
+    # feq_plus[:, :, 4] = (feq[:, :, 4] + feq[:, :, 2]) / 2
+    # feq_plus[:, :, 5] = (feq[:, :, 5] + feq[:, :, 7]) / 2
+    # feq_plus[:, :, 6] = (feq[:, :, 6] + feq[:, :, 8]) / 2
+    # feq_plus[:, :, 7] = (feq[:, :, 7] + feq[:, :, 5]) / 2
+    # feq_plus[:, :, 8] = (feq[:, :, 8] + feq[:, :, 6]) / 2
+    # feq_minus[:, :, 0] = 0
+    # feq_minus[:, :, 1] = (feq[:, :, 1] - feq[:, :, 3]) / 2
+    # feq_minus[:, :, 2] = (feq[:, :, 2] - feq[:, :, 4]) / 2
+    # feq_minus[:, :, 3] = (feq[:, :, 3] - feq[:, :, 1]) / 2
+    # feq_minus[:, :, 4] = (feq[:, :, 4] - feq[:, :, 2]) / 2
+    # feq_minus[:, :, 5] = (feq[:, :, 5] - feq[:, :, 7]) / 2
+    # feq_minus[:, :, 6] = (feq[:, :, 6] - feq[:, :, 8]) / 2
+    # feq_minus[:, :, 7] = (feq[:, :, 7] - feq[:, :, 5]) / 2
+    # feq_minus[:, :, 8] = (feq[:, :, 8] - feq[:, :, 6]) / 2
 
-    return feq, feq_minus, feq_plus
+    return feq#, feq_minus, feq_plus
 
 def easy_view(nr, arr):
     idx = ["idx" for i in arr[1, :]]
@@ -138,34 +140,33 @@ def easy_view(nr, arr):
 
 # @njit
 def streaming(f, idxs, cxs, cys, c_opp):
-    f_plus = np.zeros(f.shape)
-    f_minus = np.zeros(f.shape)
+    # f_plus = np.zeros(f.shape)
+    # f_minus = np.zeros(f.shape)
+
     for i, cx, cy, copp in zip(idxs, cxs, cys, c_opp):
         f[:, :, i] = np.roll(f[:, :, i], cx, axis=0)
         f[:, :, i] = np.roll(f[:, :, i], cy, axis=1)
-        # f_minus[:, : i] = (f[:, :, i] - f[:, :, copp]) / 2
-        # f_plus[:, : i] = (f[:, :, i] + f[:, :, copp]) / 2
 
-    f_plus[:, :, 0] = f[:, :, 0]
-    f_plus[:, :, 1] = (f[:, :, 1] + f[:, :, 3]) / 2
-    f_plus[:, :, 2] = (f[:, :, 2] + f[:, :, 4]) / 2
-    f_plus[:, :, 3] = (f[:, :, 3] + f[:, :, 1]) / 2
-    f_plus[:, :, 4] = (f[:, :, 4] + f[:, :, 2]) / 2
-    f_plus[:, :, 5] = (f[:, :, 5] + f[:, :, 7]) / 2
-    f_plus[:, :, 6] = (f[:, :, 6] + f[:, :, 8]) / 2
-    f_plus[:, :, 7] = (f[:, :, 7] + f[:, :, 5]) / 2
-    f_plus[:, :, 8] = (f[:, :, 8] + f[:, :, 6]) / 2
-    f_minus[:, :, 0] = 0
-    f_minus[:, :, 1] = (f[:, :, 1] - f[:, :, 3]) / 2
-    f_minus[:, :, 2] = (f[:, :, 2] - f[:, :, 4]) / 2
-    f_minus[:, :, 3] = (f[:, :, 3] - f[:, :, 1]) / 2
-    f_minus[:, :, 4] = (f[:, :, 4] - f[:, :, 2]) / 2
-    f_minus[:, :, 5] = (f[:, :, 5] - f[:, :, 7]) / 2
-    f_minus[:, :, 6] = (f[:, :, 6] - f[:, :, 8]) / 2
-    f_minus[:, :, 7] = (f[:, :, 7] - f[:, :, 5]) / 2
-    f_minus[:, :, 8] = (f[:, :, 8] - f[:, :, 6]) / 2
+    # f_plus[:, :, 0] = f[:, :, 0]
+    # f_plus[:, :, 1] = (f[:, :, 1] + f[:, :, 3]) / 2
+    # f_plus[:, :, 2] = (f[:, :, 2] + f[:, :, 4]) / 2
+    # f_plus[:, :, 3] = (f[:, :, 3] + f[:, :, 1]) / 2
+    # f_plus[:, :, 4] = (f[:, :, 4] + f[:, :, 2]) / 2
+    # f_plus[:, :, 5] = (f[:, :, 5] + f[:, :, 7]) / 2
+    # f_plus[:, :, 6] = (f[:, :, 6] + f[:, :, 8]) / 2
+    # f_plus[:, :, 7] = (f[:, :, 7] + f[:, :, 5]) / 2
+    # f_plus[:, :, 8] = (f[:, :, 8] + f[:, :, 6]) / 2
+    # f_minus[:, :, 0] = 0
+    # f_minus[:, :, 1] = (f[:, :, 1] - f[:, :, 3]) / 2
+    # f_minus[:, :, 2] = (f[:, :, 2] - f[:, :, 4]) / 2
+    # f_minus[:, :, 3] = (f[:, :, 3] - f[:, :, 1]) / 2
+    # f_minus[:, :, 4] = (f[:, :, 4] - f[:, :, 2]) / 2
+    # f_minus[:, :, 5] = (f[:, :, 5] - f[:, :, 7]) / 2
+    # f_minus[:, :, 6] = (f[:, :, 6] - f[:, :, 8]) / 2
+    # f_minus[:, :, 7] = (f[:, :, 7] - f[:, :, 5]) / 2
+    # f_minus[:, :, 8] = (f[:, :, 8] - f[:, :, 6]) / 2
 
-    return f, f_minus, f_plus
+    return f#, f_minus, f_plus
 
 
 # Initial Conditions
@@ -178,7 +179,8 @@ def streaming(f, idxs, cxs, cys, c_opp):
 rho = np.ones((Nx, Ny)) * rho0
 ux = np.zeros((Nx, Ny))
 uy = np.zeros((Nx, Ny))
-f, f_minus, f_plus = feq_func(rho, ux, uy, idxs, cxs, cys, weights, copp)
+# f, f_minus, f_plus = feq_func(rho, ux, uy, idxs, cxs, cys, weights, copp)
+f = feq_func(rho, ux, uy, idxs, cxs, cys, weights, copp)
 
 # for i in idxs:
 #     f[:, :, i] *= rho0 / rho
@@ -196,12 +198,13 @@ fig = plt.figure(figsize=(4, 2), dpi=80)
 
 # Simulation Main Loop
 Nt2 = 3
-for it in range(Nt):
+for it in range(Nt2):
     if it % 10000 == 0:
         print(it)
 
     # Drift
-    f, f_minus, f_plus = streaming(f, idxs, cxs, cys, copp)
+    # f, f_minus, f_plus = streaming(f, idxs, cxs, cys, copp)
+    f = streaming(f, idxs, cxs, cys, copp)
 
     # for i, cx, cy in zip(idxs, cxs, cys):
     #     f[:, :, i] = np.roll(f[:, :, i], cx, axis=0)
@@ -219,24 +222,27 @@ for it in range(Nt):
     # uy = np.sum(f * cys, 2) / rho
 
     # Apply Collision
-    feq, feq_minus, feq_plus = feq_func(rho, ux, uy, idxs, cxs, cys, weights, copp)
+    # feq, feq_minus, feq_plus = feq_func(rho, ux, uy, idxs, cxs, cys, weights, copp)
+    feq = feq_func(rho, ux, uy, idxs, cxs, cys, weights, copp)
 
-    # ### Collision
-    # Mf = np.einsum('ij,klj->kli', M, f - feq)
-    # SMf = np.einsum('ij,klj->kli', S, Mf)
-    # MSMf = np.einsum('ij,klj->kli', M_inv, SMf)
-    #
-    # f += f - MSMf
-    f += f - 1/tau_plus * (f_plus - feq_plus) - 1/tau_minus * (f_minus - feq_minus)
+    ### Collision
+    Mf = np.einsum('ij,klj->kli', M, f - feq)
+    SMf = np.einsum('ij,klj->kli', S, Mf)
+    MSMf = np.einsum('ij,klj->kli', M_inv, SMf)
+
+    f += f - MSMf
+    # f += f - 1/tau_plus * (f_plus - feq_plus) - 1/tau_minus * (f_minus - feq_minus)
     # f += -(1.0 / tau) * (f - feq)
 
     # Apply boundary
     f[walls, :] = bndryF
 
-    # Apply moving wall
-    f[:, -1, 7] += - 2 * weights[5] * rho[:, -2] * (cxs[5] * uxw + cys[5] * uyw) * 3
-    f[:, -1, 4] += - 2 * weights[2] * rho[:, -2] * (cxs[2] * uxw + cys[2] * uyw) * 3
-    f[:, -1, 8] += - 2 * weights[6] * rho[:, -2] * (cxs[6] * uxw + cys[6] * uyw) * 3
+    # # Apply moving wall
+    # f[:, -1, 7] += - 2 * weights[5] * rho[:, -2] * (cxs[5] * uxw + cys[5] * uyw) * 3
+    # f[:, -1, 4] += - 2 * weights[2] * rho[:, -2] * (cxs[2] * uxw + cys[2] * uyw) * 3
+    # f[:, -1, 8] += - 2 * weights[6] * rho[:, -2] * (cxs[6] * uxw + cys[6] * uyw) * 3
+
+    easy_view(it, f[:, :, 1])
 
     # plot in real time - color 1/2 particles blue, other half red
     if (plotRealTime and (it % 10) == 0) or (it == Nt-1):
@@ -263,14 +269,14 @@ y = np.linspace(0, Ny-1, Ny)
 # plt.savefig("Figures/Princeton/pois_test_vort2", dpi=240)
 # plt.show()
 
-# # Save figure
-# plt.figure()
-# plt.title('Arrowplot velocity')
-# plt.xlabel('x')
-# plt.ylabel('y')
-# plt.quiver(ux[1:-1, 1:-1].T, uy[1:-1, 1:-1].T)
-# # plt.show()
-# plt.savefig("Figures/Princeton/pois_test_arrow4")
+# Save figure
+plt.figure()
+plt.title('Arrowplot velocity')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.quiver(ux[1:-1, 1:-1].T, uy[1:-1, 1:-1].T)
+# plt.show()
+plt.savefig("Figures/Princeton/arrow_test")
 #
 # uxt = ux.T
 # # print(uxt)
@@ -391,38 +397,62 @@ uy_aslan_Re1000 = np.array([[0.006005803547594141, 0.06358922252653859],
                             [0.9716712456766355, -0.18788595574081524],
                             [0.9871830833001144, -0.0694432731828194]])
 
+uy_lin_Re3200 = np.array([[0.00259291270527226, 0.062058371735791096],
+                            [0.013828867761452035, 0.17726574500768055],
+                            [0.03457216940363009, 0.3078341013824885],
+                            [0.061365600691443395, 0.39231950844854074],
+                            [0.07865168539325842, 0.41689708141321047],
+                            [0.09334485738980122, 0.4337941628264209],
+                            [0.11754537597234227, 0.41996927803379425],
+                            [0.1495246326707001, 0.38463901689708146],
+                            [0.17891097666378564, 0.346236559139785],
+                            [0.21175453759723423, 0.3093701996927804],
+                            [0.26793431287813313, 0.2494623655913979],
+                            [0.38980121002592916, 0.12350230414746544],
+                            [0.5280898876404495, -0.014746543778801802],
+                            [0.6490924805531547, -0.13917050691244237],
+                            [0.7856525496974935, -0.2897081413210445],
+                            [0.9023336214347452, -0.43717357910906285],
+                            [0.9222126188418324, -0.4894009216589862],
+                            [0.9377700950734659, -0.5447004608294931],
+                            [0.948141745894555, -0.5631336405529953],
+                            [0.958513396715644, -0.535483870967742],
+                            [0.9688850475367329, -0.4463901689708142],
+                            [0.9853068280034573, -0.1913978494623656],
+                            [0.9982713915298186, -0.02857142857142858]])
+
 y = np.linspace(1/2, Nx-1/2, Nx-2)
 x = np.linspace(1/2, Nx-1/2, Nx-2)
 
-plt.figure()
-plt.title('$u_x$ at $x=L/2$ for Re=1000')
-plt.xlabel('$u_x/u_0$')
-plt.ylabel('$y/L$')
-plt.plot(ux[np.int(Nx/2), 1:-1]/uxw, y/Nx)
-plt.plot(ux_aslan_Re1000[:, 0], ux_aslan_Re1000[:, 1], 'o')
-plt.savefig(f"Figures/Princeton/ux_Re1000.png")
-
 # plt.figure()
-# plt.title('$u_x$ at $x=L/2$ for Re=200')
+# plt.title('$u_x$ at $x=L/2$ for Re=1000')
 # plt.xlabel('$u_x/u_0$')
 # plt.ylabel('$y/L$')
 # plt.plot(ux[np.int(Nx/2), 1:-1]/uxw, y/Nx)
-# # plt.plot(ux_aslan_Re200[:, 0], ux_aslan_Re200[:, 1], 'o')
-# plt.savefig(f"Figures/Princeton/ux_test.png")
+# plt.plot(ux_aslan_Re1000[:, 0], ux_aslan_Re1000[:, 1], 'o')
+# plt.savefig(f"Figures/Princeton/ux_Re1000.png")
 
 plt.figure()
-plt.title('$u_y$ at $y=L/2$ for Re=1000')
-plt.xlabel('$u_y/u_0$')
-plt.ylabel('$x/L$')
-plt.plot(x/Nx, uy[1:-1, np.int(Nx/2)]/uxw)
-plt.plot(uy_aslan_Re1000[:, 0], uy_aslan_Re1000[:, 1], 'o')
-plt.savefig(f"Figures/Princeton/uy_Re1000.png")
+plt.title(f'$u_x$ at $x=L/2$ for Re={Re_lbm}')
+plt.xlabel('$u_x/u_0$')
+plt.ylabel('$y/L$')
+plt.plot(ux[np.int(Nx/2), 1:-1]/uxw, y/Nx)
+# plt.plot(ux_lin_Re3200[:, 0], ux_lin_Re3200[:, 1], 'o')
+plt.savefig(f"Figures/Princeton/ux_test.png")
 
 # plt.figure()
-# plt.title('$u_y$ at $x=L/2$ for Re=200')
+# plt.title('$u_y$ at $y=L/2$ for Re=1000')
 # plt.xlabel('$u_y/u_0$')
 # plt.ylabel('$x/L$')
 # plt.plot(x/Nx, uy[1:-1, np.int(Nx/2)]/uxw)
-# # plt.plot(uy_aslan_Re200[:, 0], uy_aslan_Re200[:, 1], 'o')
-# plt.savefig(f"Figures/Princeton/uy_test.png")
+# plt.plot(uy_aslan_Re1000[:, 0], uy_aslan_Re1000[:, 1], 'o')
+# plt.savefig(f"Figures/Princeton/uy_Re1000.png")
+
+plt.figure()
+plt.title(f'$u_y$ at $x=L/2$ for Re={Re_lbm}')
+plt.xlabel('$u_y/u_0$')
+plt.ylabel('$x/L$')
+plt.plot(x/Nx, uy[1:-1, np.int(Nx/2)]/uxw)
+plt.plot(uy_lin_Re3200[:, 0], uy_lin_Re3200[:, 1], 'o')
+plt.savefig(f"Figures/Princeton/uy_test.png")
 

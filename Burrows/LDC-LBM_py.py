@@ -1,21 +1,29 @@
 import csv
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import sys
 from numba import njit
+from scipy.interpolate import RegularGridInterpolator
+
+np.set_printoptions(threshold=sys.maxsize)
+pd.set_option("display.max_rows", None, "display.max_columns", None)
+pd.set_option('display.expand_frame_repr', False)
 
 # Parameters
 TRT = True
 aspect_ratio = 1
-Nmsg = 5000
-Nsteps = 1.0e8
+Nmsg = 1
+Nsteps = 5 #2.0e4
 q = 9
 magic = 0.25
+plot_path = "/Users/Jesper/Documents/MEP/Code/Burrows/Figures/"
 
 # Constants
 Re = 1000
-Nx = int(80)
+Nx = int(20)
 Ny = int(aspect_ratio * Nx)
-umax_sim = 0.1
+umax_sim = 0.05
 nu_sim = umax_sim * Nx / Re
 tau = 3 * nu_sim + 0.5
 cs = 1.0 / np.sqrt(3)
@@ -37,14 +45,21 @@ f0 = np.zeros((Nx, Ny), dtype=float)
 f1 = np.zeros((Nx, Ny, q-1), dtype=float)
 f2 = np.zeros((Nx, Ny, q-1), dtype=float)
 rho = np.ones((Nx, Ny), dtype=float)
-ux = np.ones((Nx, Ny), dtype=float)
-uy = np.ones((Nx, Ny), dtype=float)
+ux = np.zeros((Nx, Ny), dtype=float)
+uy = np.zeros((Nx, Ny), dtype=float)
 
 w0 = 4.0/9.0
 ws = 1.0/9.0
 wd = 1.0/9.0
 
-# Field indices?
+
+def easy_view(nr, arr):
+    idx = ["idx" for i in arr[1, :]]
+    col = ["col" for j in arr[:, 1]]
+
+    dataset = pd.DataFrame(arr.T, index=idx, columns=col)
+    print(nr, dataset)
+
 
 # Equilibrium distribution
 @njit
@@ -76,7 +91,7 @@ def eq_dist_func(w0, ws, wd, f0, f1, r, u, v):
 
 
 @njit
-def stream_and_collide(f0, f1, fnew, Nx, Ny, TRT, tauinv, umax, tauinv_minus):
+def stream_and_collide(f0, f1, f2, Nx, Ny, TRT, tauinv, umax, tauinv_minus):
     # direction numbering
     # 6 2 5
     # 3 0 1
@@ -217,11 +232,11 @@ def stream_and_collide(f0, f1, fnew, Nx, Ny, TRT, tauinv, umax, tauinv_minus):
         fnew[:, :, 8] = omtauinv * ft1[:, :, 7] + tauinv * single_feq(wd, drho, ux - uy, wdu2x15)
 
     f0 = fnew[:, :, 0]
-    f2 = fnew[:, :, 1:-1]
+    f2 = fnew[:, :, 1:]
 
     return f0, f1, f2
 
-# Compute macro variables
+
 def macros(f0, f2):
     r = 1.0 + f0 + f2[:, :, 0] + f2[:, :, 1] + f2[:, :, 2] + f2[:, :, 3] + f2[:, :, 4] + f2[:, :, 5] + f2[:, :, 6] + f2[:, :, 7]
     u = f2[:, :, 0] + f2[:, :, 4] + f2[:, :, 7] - (f2[:, :, 2] + f2[:, :, 5] + f2[:, :, 6])
@@ -229,14 +244,121 @@ def macros(f0, f2):
 
     return r, u, v
 
+
 # Initialize f at equilibrium
 f0, f1 = eq_dist_func(w0, ws, wd, f0, f1, rho, ux, uy)
 
 for t in range(0, int(Nsteps)):
     msg = (t % Nmsg == 0)
     if t % 2 == 0:
-        stream_and_collide(f0, f1, f2, Nx, Ny, TRT, omega, umax_sim, omega_minus)
+        f0, f1, f2 = stream_and_collide(f0, f1, f2, Nx, Ny, TRT, omega, umax_sim, omega_minus)
     else:
-        stream_and_collide(f0, f2, f1, Nx, Ny, TRT, omega, umax_sim, omega_minus)
-    # if msg:
+        f0, f1, f2 = stream_and_collide(f0, f2, f1, Nx, Ny, TRT, omega, umax_sim, omega_minus)
 
+    if msg:
+        print(t)
+        easy_view(t, f0)
+        easy_view(t, f2[:, :, 0])
+        easy_view(t, f2[:, :, 1])
+        easy_view(t, f2[:, :, 2])
+        easy_view(t, f2[:, :, 3])
+        easy_view(t, f2[:, :, 4])
+        easy_view(t, f2[:, :, 5])
+        easy_view(t, f2[:, :, 6])
+        easy_view(t, f2[:, :, 7])
+
+# Compute macro variables
+rho, u, v = macros(f0, f2)
+
+u = u / umax_sim
+v = v / umax_sim
+dx = 1.0 / Nx
+dy = dx
+(x, y) = np.meshgrid(np.linspace(0.5*dx, 1.0-0.5*dx, Nx), np.linspace(0.5*dy, aspect_ratio - 0.5 * dy, Ny))
+vmag = np.sqrt(u**2 + v**2)
+vort = np.gradient(v, dx, edge_order=2, axis=1) - np.gradient(u, dy, edge_order=2, axis=0)
+
+
+# Vector field
+plt.figure(figsize=(15, 15), dpi = 80)
+plt.subplot(1, 3, 1)
+plt.contourf(x, y, vmag, 20)
+quiverSkip = max(1, np.round(Nx / 20).astype(np.int))
+plt.quiver(x[::quiverSkip, ::quiverSkip], y[::quiverSkip, ::quiverSkip], u[::quiverSkip, ::quiverSkip], v[::quiverSkip, ::quiverSkip])
+_ = plt.axis('scaled')
+plt.xlim((0, 1))
+plt.ylim((0, aspect_ratio))
+plt.title(f'Vector field, Re = {Re}')
+fig_name = plot_path + f"vectorfield_test_Re={Re}"
+plt.savefig(fig_name)
+
+# Vorticity contour lines
+plt.subplot(1, 3, 2)
+litVortLevels = np.array([-3, -2, -1, -0.5, 0, 0.5, 1, 2, 3, 4, 5])
+plt.contour(x, y, vort, litVortLevels, colors='k', linestyles='solid')
+_ = plt.axis('scaled')
+plt.xlim((0, 1))
+plt.ylim((0, aspect_ratio))
+plt.title(f'Vorticity, Re = {Re}')
+fig_name = plot_path + f"vorticitycontour_test_Re={Re}"
+plt.savefig(fig_name)
+
+# Streamlines
+ax0 = plt.subplot(1, 3, 3)
+ax0.streamplot(x[0, :], y[:, 0], u, v, density=4, color=vmag, arrowstyle='-', minlength=0.1, linewidth=1, transform=None)
+plt.axis("scaled")
+plt.title(f"Streamlines, N={Nx}, Re={Re}")
+plt.xlim((0, 1))
+plt.ylim((0, aspect_ratio))
+fig_name = plot_path + f"streamlines_test_Re={Re}"
+plt.savefig(fig_name)
+
+# Comparison to Ghia et al. results
+litRe = [100, 400, 1000, 3200, 5000, 7500, 10000]
+if Re in litRe and Nx == Ny:
+    with open('ghiaV.csv', newline='') as csvfile:
+        contents = list(csv.reader(csvfile))
+
+    labels = contents.pop(0)
+    data = np.array(contents, dtype=np.float32)
+    litV = {}
+    for i, key in enumerate(labels):
+        if i > 0:
+            key = int(key)
+        litV[key] = data[:, i]
+
+    with open('ghiaU.csv', newline='') as csvfile:
+        contents = list(csv.reader(csvfile))
+
+    labels = contents.pop(0)
+    data = np.array(contents, dtype=np.float32)
+    litU = {}
+    for i,  key in enumerate(labels):
+        if i > 0:
+            key = int(key)
+        litU[key] = data[:, i]
+
+    uInterpolator = RegularGridInterpolator((y[:, 0], x[0, :]), u)
+    profile = np.zeros((100, 2))
+    profile[:, 0] = np.linspace(y[0, 0], y[-1, -1], 100)
+    profile[:, 1] = np.ones(100) * 0.5
+    uprof = uInterpolator(profile)
+    plt.figure(figsize=(10, 5), dpi= 80)
+    plt.subplot(1, 2, 1)
+    plt.plot(profile[:, 0], uprof)
+    plt.plot(litU['y'], litU[Re], 'rx')
+    plt.title(f'U Profile vs Ghia et al. Re = {Re}')
+    fig_name = plot_path + f"uprofile_test_Re={Re}"
+    plt.savefig(fig_name)
+
+    vInterpolator = RegularGridInterpolator((y[:, 0], x[0, :]), v)
+    profile = np.zeros((100, 2))
+    profile[:, 0] = np.ones(100) * 0.5
+    profile[:, 1] = np.linspace(x[0, 0], x[-1, -1], 100)
+    vprof = vInterpolator(profile)
+    plt.subplot(1, 2, 2)
+    plt.plot(profile[:, 1], vprof)
+    plt.plot(litV['x'], litV[Re], 'rx')
+    plt.title(f'V Profile vs Ghia et al. Re = {Re}')
+    fig_name = plot_path + f"vprofile_test_Re={Re}"
+    plt.savefig(fig_name)

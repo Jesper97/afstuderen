@@ -1,9 +1,10 @@
 import numpy as np
 import time
 
-# a = np.array(range(10))
-# s = slice(2, 4)
-# print(a[s])
+a = np.array(range(10))
+s = slice(2, 4)
+print(a)
+print(a[1:])
 
 z = 2.63
 

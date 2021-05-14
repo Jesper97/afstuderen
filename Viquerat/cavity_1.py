@@ -13,7 +13,7 @@ from lattice import *
 Re_lbm      = 3200.0
 u_lbm       = 0.05
 L_lbm       = 100
-t_max       = 20.0
+t_max       = 100.0
 
 # Deduce other parameters
 Cs          = 1.0/math.sqrt(3.0)
@@ -25,7 +25,7 @@ dt          = Re_lbm*nu_lbm/L_lbm**2
 it_max      = math.floor(t_max/dt)
 
 # Other parameters
-output_freq = 5000
+output_freq = 25000
 dpi         = 200
 
 # Initialize lattice

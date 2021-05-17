@@ -25,7 +25,7 @@ class lbm_solver:
                  bc_value, # if bc_type = 0, we need to specify the velocity in bc_value
                  cy = 0, # whether to place a cylindrical obstacle
                  cy_para = [0.0, 0.0, 0.0], # location and radius of the cylinder
-                 steps = 5): # total steps to run
+                 steps = 100000): # total steps to run
         self.nx = nx  # by convention, dx = dy = dt = 1.0 (lattice units)
         self.ny = ny
         self.niu = niu
@@ -36,6 +36,8 @@ class lbm_solver:
         self.mask = ti.field(dtype=ti.f32, shape=(nx, ny))
         self.f_old = ti.Vector.field(9, dtype=ti.f32, shape=(nx, ny))
         self.f_new = ti.Vector.field(9, dtype=ti.f32, shape=(nx, ny))
+        self.f_new_plus = ti.Vector.field(9, dtype=ti.f32, shape=(nx, ny))
+        self.f_new_minus = ti.Vector.field(9, dtype=ti.f32, shape=(nx, ny))
         self.w = ti.field(dtype=ti.f32, shape=9)
         self.e = ti.field(dtype=ti.i32, shape=(9, 2))
         self.bc_type = ti.field(dtype=ti.i32, shape=4)
@@ -52,6 +54,8 @@ class lbm_solver:
         arr = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1],
                         [-1, 1], [-1, -1], [1, -1]], dtype=np.int32)
         self.e.from_numpy(arr)
+
+        self.tau_minus = 1/4 / (self.tau - 1/2) + 1/2
 
     @ti.func # compute equilibrium distribution function
     def f_eq(self, i, j, k):
@@ -80,7 +84,6 @@ class lbm_solver:
         #####
         # for i, j in ti.ndrange((1, self.nx - 1), (1, self.ny - 1)):
         for i, j in ti.ndrange((0, self.nx), (0, self.ny)):
-            print(i, j)
             for k in ti.static(range(9)):
                 ip = i - self.e[k, 0]
                 jp = j - self.e[k, 1]
@@ -316,10 +319,11 @@ class lbm_solver:
                 vmin=-0.02, vmax=0.02),cmap=my_cmap).to_rgba(vor)
             vel_img = cm.plasma(vel_mag / 0.15)
             img = np.concatenate((vor_img, vel_img), axis=1)
-            if (i % 1000 == 0):
+            if (i % 10000 == 0):
                 # gui.set_image(img)
                 # gui.show()
                 print('Step: {:}'.format(i))
+                self.easy_view(i, vel[:, :, 0])
                 # ti.imwrite((img[:,:,0:3]*255).astype(np.uint8), 'fig/karman_'+str(i).zfill(6)+'.png')
 
     def pass_to_py(self):
@@ -328,14 +332,14 @@ class lbm_solver:
 if __name__ == '__main__':
     flow_case = 1
     Nx = np.int(128)
-    umax = 0.05
+    umax = 0.1
     if (flow_case == 0):  # von Karman vortex street: Re = U*D/niu = 200
         lbm = lbm_solver(801, 201, 0.01, [0, 0, 1, 0],
              [[0.1, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
              1,[160.0, 100.0, 20.0])
         lbm.solve()
     elif (flow_case == 1):  # lid-driven cavity flow: Re = U*L/niu = 1000
-        lbm = lbm_solver(Nx, Nx, 0.002, [0, 0, 0, 0],
+        lbm = lbm_solver(Nx, Nx, 0.004, [0, 0, 0, 0],
                          [[0.0, 0.0], [umax, 0.0], [0.0, 0.0], [0.0, 0.0]])
         lbm.solve()
 

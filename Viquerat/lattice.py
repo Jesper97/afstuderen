@@ -402,15 +402,18 @@ class Lattice:
             uy = np.flipud(uy)
             ux = np.flipud(ux)
             uy_cs = uy[np.int(self.nx/2), :]
-            print(uy_cs)
-            print(uy_cs.shape)
-            print(np.int(self.nx/2))
             ux_cs = ux[:, np.int(self.ny/2)]
             x  = np.linspace(0, 1, self.nx)
             y  = np.linspace(0, 1, self.ny)
 
+            y_ref, u_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(0, 2))
+            x_ref, v_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(6, 8))
+
             ## Plot uy
-            plt.plot(x, uy_cs)
+            plt.close()
+            plt.clf()
+            plt.plot(x, uy_cs/self.u_lbm)
+            plt.plot(x_ref, v_ref, 'rs')
             filename = self.output_dir+'uy_cs.png'
             plt.savefig(filename,
                         dpi=self.dpi)
@@ -418,7 +421,8 @@ class Lattice:
 
             ## Plot ux
             plt.clf()
-            plt.plot(ux_cs, y)
+            plt.plot(ux_cs/self.u_lbm, y)
+            plt.plot(u_ref, y_ref, 'rs')
             filename = self.output_dir+'ux_cs.png'
             plt.savefig(filename,
                         dpi=self.dpi)

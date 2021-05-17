@@ -18,3 +18,7 @@ print(ans2[1, 1])
 
 y = np.linspace(0, 40-1, 40)
 print(y)
+
+umax = 0.1
+x = np.array([[0.0, 0.0], [umax, 0.0], [0.0, 0.0], [0.0, 0.0]])
+print(x[1, 0])

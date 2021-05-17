@@ -7,8 +7,13 @@ import numpy as np
 import matplotlib
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+import pandas as pd
+import sys
 
 ti.init(arch=ti.gpu)
+np.set_printoptions(threshold=sys.maxsize)
+pd.set_option("display.max_rows", None, "display.max_columns", None)
+pd.set_option('display.expand_frame_repr', False)
 
 @ti.data_oriented
 class lbm_solver:
@@ -20,7 +25,7 @@ class lbm_solver:
                  bc_value, # if bc_type = 0, we need to specify the velocity in bc_value
                  cy = 0, # whether to place a cylindrical obstacle
                  cy_para = [0.0, 0.0, 0.0], # location and radius of the cylinder
-                 steps = 3000): # total steps to run
+                 steps = 5): # total steps to run
         self.nx = nx  # by convention, dx = dy = dt = 1.0 (lattice units)
         self.ny = ny
         self.niu = niu
@@ -72,19 +77,133 @@ class lbm_solver:
 
     @ti.kernel
     def collide_and_stream(self): # lbm core equation
-        for i, j in ti.ndrange((1, self.nx - 1), (1, self.ny - 1)):
+        #####
+        # for i, j in ti.ndrange((1, self.nx - 1), (1, self.ny - 1)):
+        for i, j in ti.ndrange((0, self.nx), (0, self.ny)):
+            print(i, j)
             for k in ti.static(range(9)):
                 ip = i - self.e[k, 0]
                 jp = j - self.e[k, 1]
                 self.f_new[i,j][k] = (1.0-self.inv_tau)*self.f_old[ip,jp][k] + \
-                                        self.f_eq(ip,jp,k)*self.inv_tau
+                                    self.f_eq(ip,jp,k)*self.inv_tau
+
+        #####
+        # Left wall
+        for i, j in ti.ndrange((0, 1), (1, self.ny-1)):
+            self.f_new[i, j][0] = (1.0-self.inv_tau)*self.f_old[i, j][0] + self.f_eq(i, j, 0)*self.inv_tau
+            self.f_new[i, j][1] = (1.0-self.inv_tau)*self.f_old[i, j][3] + self.f_eq(i, j, 3)*self.inv_tau
+            self.f_new[i, j][2] = (1.0-self.inv_tau)*self.f_old[i, j-1][2] + self.f_eq(i, j-1, 2)*self.inv_tau
+            self.f_new[i, j][3] = (1.0-self.inv_tau)*self.f_old[i+1, j][3] + self.f_eq(i+1, j, 3)*self.inv_tau
+            self.f_new[i, j][4] = (1.0-self.inv_tau)*self.f_old[i, j+1][4] + self.f_eq(i, j+1, 4)*self.inv_tau
+            self.f_new[i, j][5] = (1.0-self.inv_tau)*self.f_old[i, j][7] + self.f_eq(i, j, 7)*self.inv_tau
+            self.f_new[i, j][6] = (1.0-self.inv_tau)*self.f_old[i+1, j-1][6] + self.f_eq(i+1, j-1, 6)*self.inv_tau
+            self.f_new[i, j][7] = (1.0-self.inv_tau)*self.f_old[i+1, j+1][7] + self.f_eq(i+1, j+1, 7)*self.inv_tau
+            self.f_new[i, j][8] = (1.0-self.inv_tau)*self.f_old[i, j][6] + self.f_eq(i, j, 6)*self.inv_tau
+
+        # Right wall
+        for i, j in ti.ndrange((self.nx-1, self.nx), (1, self.ny-1)):
+            i = self.nx - 1
+            self.f_new[i, j][0] = (1.0-self.inv_tau)*self.f_old[i, j][0] + self.f_eq(i, j, 0)*self.inv_tau
+            self.f_new[i, j][1] = (1.0-self.inv_tau)*self.f_old[i-1, j][1] + self.f_eq(i-1, j, 1)*self.inv_tau
+            self.f_new[i, j][2] = (1.0-self.inv_tau)*self.f_old[i, j-1][2] + self.f_eq(i, j-1, 2)*self.inv_tau
+            self.f_new[i, j][3] = (1.0-self.inv_tau)*self.f_old[i, j][1] + self.f_eq(i, j, 1)*self.inv_tau
+            self.f_new[i, j][4] = (1.0-self.inv_tau)*self.f_old[i, j+1][4] + self.f_eq(i, j+1, 4)*self.inv_tau
+            self.f_new[i, j][5] = (1.0-self.inv_tau)*self.f_old[i-1, j-1][5] + self.f_eq(i-1, j-1, 5)*self.inv_tau
+            self.f_new[i, j][6] = (1.0-self.inv_tau)*self.f_old[i, j][8] + self.f_eq(i, j, 8)*self.inv_tau
+            self.f_new[i, j][7] = (1.0-self.inv_tau)*self.f_old[i, j][5] + self.f_eq(i, j, 5)*self.inv_tau
+            self.f_new[i, j][8] = (1.0-self.inv_tau)*self.f_old[i-1, j+1][8] + self.f_eq(i-1, j+1, 8)*self.inv_tau
+
+        # Bottom wall
+        for i, j in ti.ndrange((1, self.nx-1), (0, 1)):
+            self.f_new[i, j][0] = (1.0-self.inv_tau)*self.f_old[i, j][0] + self.f_eq(i, j, 0)*self.inv_tau
+            self.f_new[i, j][1] = (1.0-self.inv_tau)*self.f_old[i-1, j][1] + self.f_eq(i-1, j, 1)*self.inv_tau
+            self.f_new[i, j][2] = (1.0-self.inv_tau)*self.f_old[i, j][4] + self.f_eq(i, j, 4)*self.inv_tau
+            self.f_new[i, j][3] = (1.0-self.inv_tau)*self.f_old[i+1, j][3] + self.f_eq(i+1, j, 3)*self.inv_tau
+            self.f_new[i, j][4] = (1.0-self.inv_tau)*self.f_old[i, j+1][4] + self.f_eq(i, j+1, 4)*self.inv_tau
+            self.f_new[i, j][5] = (1.0-self.inv_tau)*self.f_old[i, j][7] + self.f_eq(i, j, 7)*self.inv_tau
+            self.f_new[i, j][6] = (1.0-self.inv_tau)*self.f_old[i, j][8] + self.f_eq(i, j, 8)*self.inv_tau
+            self.f_new[i, j][7] = (1.0-self.inv_tau)*self.f_old[i+1, j+1][7] + self.f_eq(i+1, j+1, 7)*self.inv_tau
+            self.f_new[i, j][8] = (1.0-self.inv_tau)*self.f_old[i-1, j+1][8] + self.f_eq(i-1, j+1, 8)*self.inv_tau
+
+        # Top wall
+        for i, j in ti.ndrange((1, self.nx-1), (self.ny-1, self.ny)):
+            self.f_new[i, j][0] = (1.0-self.inv_tau)*self.f_old[i, j][0] + self.f_eq(i, j, 0)*self.inv_tau
+            self.f_new[i, j][1] = (1.0-self.inv_tau)*self.f_old[i-1, j][1] + self.f_eq(i-1, j, 1)*self.inv_tau
+            self.f_new[i, j][2] = (1.0-self.inv_tau)*self.f_old[i, j-1][2] + self.f_eq(i, j-1, 2)*self.inv_tau
+            self.f_new[i, j][3] = (1.0-self.inv_tau)*self.f_old[i+1, j][3] + self.f_eq(i+1, j, 3)*self.inv_tau
+            self.f_new[i, j][4] = (1.0-self.inv_tau)*self.f_old[i, j][2] + self.f_eq(i, j, 2)*self.inv_tau
+            self.f_new[i, j][5] = (1.0-self.inv_tau)*self.f_old[i-1, j-1][5] + self.f_eq(i-1, j-1, 5)*self.inv_tau
+            self.f_new[i, j][6] = (1.0-self.inv_tau)*self.f_old[i+1, j-1][6] + self.f_eq(i+1, j-1, 6)*self.inv_tau
+            self.f_new[i, j][7] = (1.0-self.inv_tau)*self.f_old[i, j][5] + self.f_eq(i, j, 5)*self.inv_tau - \
+                                  6 * self.w[5] * self.rho[i, j] * self.bc_value[1, 0]
+            self.f_new[i, j][8] = (1.0-self.inv_tau)*self.f_old[i, j][6] + self.f_eq(i, j, 6)*self.inv_tau + \
+                                  6 * self.w[6] * self.rho[i, j] * self.bc_value[1, 0]
+
+        # Bottom left corner
+        i = 0
+        j = 0
+        self.f_new[i, j][0] = (1.0-self.inv_tau)*self.f_old[i, j][0] + self.f_eq(i, j, 0)*self.inv_tau
+        self.f_new[i, j][1] = (1.0-self.inv_tau)*self.f_old[i, j][3] + self.f_eq(i, j, 3)*self.inv_tau
+        self.f_new[i, j][2] = (1.0-self.inv_tau)*self.f_old[i, j][4] + self.f_eq(i, j, 4)*self.inv_tau
+        self.f_new[i, j][3] = (1.0-self.inv_tau)*self.f_old[i+1, j][3] + self.f_eq(i+1, j, 3)*self.inv_tau
+        self.f_new[i, j][4] = (1.0-self.inv_tau)*self.f_old[i, j+1][4] + self.f_eq(i, j+1, 4)*self.inv_tau
+        self.f_new[i, j][5] = (1.0-self.inv_tau)*self.f_old[i, j][7] + self.f_eq(i, j, 7)*self.inv_tau
+        self.f_new[i, j][6] = (1.0-self.inv_tau)*self.f_old[i, j][8] + self.f_eq(i, j, 8)*self.inv_tau
+        self.f_new[i, j][7] = (1.0-self.inv_tau)*self.f_old[i+1, j+1][7] + self.f_eq(i+1, j+1, 7)*self.inv_tau
+        self.f_new[i, j][8] = (1.0-self.inv_tau)*self.f_old[i, j][6] + self.f_eq(i, j, 6)*self.inv_tau
+
+        # Bottom right corner
+        i = self.nx - 1
+        j = 0
+        self.f_new[i, j][0] = (1.0-self.inv_tau)*self.f_old[i, j][0] + self.f_eq(i, j, 0)*self.inv_tau
+        self.f_new[i, j][1] = (1.0-self.inv_tau)*self.f_old[i-1, j][1] + self.f_eq(i-1, j, 1)*self.inv_tau
+        self.f_new[i, j][2] = (1.0-self.inv_tau)*self.f_old[i, j][4] + self.f_eq(i, j, 4)*self.inv_tau
+        self.f_new[i, j][3] = (1.0-self.inv_tau)*self.f_old[i, j][1] + self.f_eq(i, j, 1)*self.inv_tau
+        self.f_new[i, j][4] = (1.0-self.inv_tau)*self.f_old[i, j+1][4] + self.f_eq(i, j+1, 4)*self.inv_tau
+        self.f_new[i, j][5] = (1.0-self.inv_tau)*self.f_old[i, j][7] + self.f_eq(i, j, 7)*self.inv_tau
+        self.f_new[i, j][6] = (1.0-self.inv_tau)*self.f_old[i, j][8] + self.f_eq(i, j, 8)*self.inv_tau
+        self.f_new[i, j][7] = (1.0-self.inv_tau)*self.f_old[i, j][5] + self.f_eq(i, j, 5)*self.inv_tau
+        self.f_new[i, j][8] = (1.0-self.inv_tau)*self.f_old[i-1, j+1][8] + self.f_eq(i-1, j+1, 8)*self.inv_tau
+
+        # Top right corner
+        i = self.nx - 1
+        j = self.ny - 1
+        self.f_new[i, j][0] = (1.0-self.inv_tau)*self.f_old[i, j][0] + self.f_eq(i, j, 0)*self.inv_tau
+        self.f_new[i, j][1] = (1.0-self.inv_tau)*self.f_old[i-1, j][1] + self.f_eq(i-1, j, 1)*self.inv_tau
+        self.f_new[i, j][2] = (1.0-self.inv_tau)*self.f_old[i, j-1][2] + self.f_eq(i, j-1, 2)*self.inv_tau
+        self.f_new[i, j][3] = (1.0-self.inv_tau)*self.f_old[i, j][1] + self.f_eq(i, j, 1)*self.inv_tau
+        self.f_new[i, j][4] = (1.0-self.inv_tau)*self.f_old[i, j][2] + self.f_eq(i, j, 2)*self.inv_tau
+        self.f_new[i, j][5] = (1.0-self.inv_tau)*self.f_old[i-1, j-1][5] + self.f_eq(i-1, j-1, 5)*self.inv_tau
+        self.f_new[i, j][6] = (1.0-self.inv_tau)*self.f_old[i, j][8] + self.f_eq(i, j, 8)*self.inv_tau
+        self.f_new[i, j][7] = (1.0-self.inv_tau)*self.f_old[i, j][5] + self.f_eq(i, j, 5)*self.inv_tau - \
+                                  6 * self.w[5] * self.rho[i, j] * self.bc_value[1, 0]
+        self.f_new[i, j][8] = (1.0-self.inv_tau)*self.f_old[i, j][6] + self.f_eq(i, j, 6)*self.inv_tau + \
+                                  6 * self.w[6] * self.rho[i, j] * self.bc_value[1, 0]
+
+        # Top left corner
+        i = 0
+        j = self.ny - 1
+        self.f_new[i, j][0] = (1.0-self.inv_tau)*self.f_old[i, j][0] + self.f_eq(i, j, 0)*self.inv_tau
+        self.f_new[i, j][1] = (1.0-self.inv_tau)*self.f_old[i, j][3] + self.f_eq(i, j, 3)*self.inv_tau
+        self.f_new[i, j][2] = (1.0-self.inv_tau)*self.f_old[i, j-1][2] + self.f_eq(i, j-1, 2)*self.inv_tau
+        self.f_new[i, j][3] = (1.0-self.inv_tau)*self.f_old[i+1, j][3] + self.f_eq(i+1, j, 3)*self.inv_tau
+        self.f_new[i, j][4] = (1.0-self.inv_tau)*self.f_old[i, j][2] + self.f_eq(i, j, 2)*self.inv_tau
+        self.f_new[i, j][5] = (1.0-self.inv_tau)*self.f_old[i, j][7] + self.f_eq(i, j, 7)*self.inv_tau
+        self.f_new[i, j][6] = (1.0-self.inv_tau)*self.f_old[i+1, j-1][6] + self.f_eq(i+1, j-1, 6)*self.inv_tau
+        self.f_new[i, j][7] = (1.0-self.inv_tau)*self.f_old[i, j][5] + self.f_eq(i, j, 5)*self.inv_tau - \
+                                  6 * self.w[5] * self.rho[i, j] * self.bc_value[1, 0]
+        self.f_new[i, j][8] = (1.0-self.inv_tau)*self.f_old[i, j][6] + self.f_eq(i, j, 6)*self.inv_tau + \
+                                  6 * self.w[6] * self.rho[i, j] * self.bc_value[1, 0]
 
     @ti.kernel
     def update_macro_var(self): # compute rho u v
-        for i, j in ti.ndrange((1, self.nx - 1), (1, self.ny - 1)):
+        #####
+        # for i, j in ti.ndrange((1, self.nx - 1), (1, self.ny - 1)):
+        for i, j in ti.ndrange((0, self.nx), (0, self.ny)):
             self.rho[i, j] = 0.0
             self.vel[i, j][0] = 0.0
             self.vel[i, j][1] = 0.0
+
             for k in ti.static(range(9)):
                 self.f_old[i, j][k] = self.f_new[i, j][k]
                 self.rho[i, j] += self.f_new[i, j][k]
@@ -92,6 +211,7 @@ class lbm_solver:
                                       self.f_new[i, j][k])
                 self.vel[i, j][1] += (ti.cast(self.e[k, 1], ti.f32) *
                                       self.f_new[i, j][k])
+
             self.vel[i, j][0] /= self.rho[i, j]
             self.vel[i, j][1] /= self.rho[i, j]
 
@@ -145,13 +265,42 @@ class lbm_solver:
             self.f_old[ibc,jbc][k] = self.f_eq(ibc,jbc,k) - self.f_eq(inb,jnb,k) + \
                                         self.f_old[inb,jnb][k]
 
+    def easy_view(self, nr, arr):
+        idx = ["idx" for i in arr[1, :]]
+        col = ["col" for j in arr[:, 1]]
+
+        dataset = pd.DataFrame(arr.T, index=idx, columns=col)
+        print(nr, dataset)
+
     def solve(self):
         gui = ti.GUI('lbm solver', (self.nx, 2 * self.ny))
         self.init()
         for i in range(self.steps):
             self.collide_and_stream()
+
+            #####
+            # val = self.f_new.to_numpy()
+            # print("new step")
+            # self.easy_view(0, val[:, :, 0])
+            # self.easy_view(1, val[:, :, 1])
+            # self.easy_view(2, val[:, :, 2])
+            # self.easy_view(3, val[:, :, 3])
+            # self.easy_view(4, val[:, :, 4])
+            # self.easy_view(5, val[:, :, 5])
+            # self.easy_view(6, val[:, :, 6])
+            # self.easy_view(7, val[:, :, 7])
+            # self.easy_view(8, val[:, :, 8])
+
             self.update_macro_var()
-            self.apply_bc()
+
+            #####
+            # val = self.vel.to_numpy()
+            # self.easy_view("ux", val[:, :, 0])
+            # self.easy_view("uy", val[:, :, 1])
+
+            #####
+            # self.apply_bc()
+
             ##  code fragment displaying vorticity is contributed by woclass
             vel = self.vel.to_numpy()
             ugrad = np.gradient(vel[:, :, 0])
@@ -178,15 +327,15 @@ class lbm_solver:
 
 if __name__ == '__main__':
     flow_case = 1
-    Nx = np.int(256)
-    umax = 0.1
+    Nx = np.int(128)
+    umax = 0.05
     if (flow_case == 0):  # von Karman vortex street: Re = U*D/niu = 200
         lbm = lbm_solver(801, 201, 0.01, [0, 0, 1, 0],
              [[0.1, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
              1,[160.0, 100.0, 20.0])
         lbm.solve()
     elif (flow_case == 1):  # lid-driven cavity flow: Re = U*L/niu = 1000
-        lbm = lbm_solver(Nx, Nx, 0.00796875, [0, 0, 0, 0],
+        lbm = lbm_solver(Nx, Nx, 0.002, [0, 0, 0, 0],
                          [[0.0, 0.0], [umax, 0.0], [0.0, 0.0], [0.0, 0.0]])
         lbm.solve()
 
@@ -201,7 +350,7 @@ if __name__ == '__main__':
         axes.set_xlabel(r'$u_x$')
         axes.set_ylabel(r'$y$')
         plt.tight_layout()
-        plt.savefig("ux_Re3200_highres.png")
+        plt.savefig("ux_Re3200_test_bb.png")
 
         plt.clf()
         fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=200)
@@ -211,4 +360,4 @@ if __name__ == '__main__':
         axes.set_xlabel(r'$u_x$')
         axes.set_ylabel(r'$y$')
         plt.tight_layout()
-        plt.savefig("uy_Re3200_highres.png")
+        plt.savefig("uy_Re3200_test_bb.png")

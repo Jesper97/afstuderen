@@ -20,7 +20,7 @@ class lbm_solver:
                  bc_value, # if bc_type = 0, we need to specify the velocity in bc_value
                  cy = 0, # whether to place a cylindrical obstacle
                  cy_para = [0.0, 0.0, 0.0], # location and radius of the cylinder
-                 steps = 200000): # total steps to run
+                 steps = 3000): # total steps to run
         self.nx = nx  # by convention, dx = dy = dt = 1.0 (lattice units)
         self.ny = ny
         self.niu = niu
@@ -178,15 +178,16 @@ class lbm_solver:
 
 if __name__ == '__main__':
     flow_case = 1
-    Nx = np.int(128)
+    Nx = np.int(256)
+    umax = 0.1
     if (flow_case == 0):  # von Karman vortex street: Re = U*D/niu = 200
         lbm = lbm_solver(801, 201, 0.01, [0, 0, 1, 0],
              [[0.1, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
              1,[160.0, 100.0, 20.0])
         lbm.solve()
     elif (flow_case == 1):  # lid-driven cavity flow: Re = U*L/niu = 1000
-        lbm = lbm_solver(Nx, Nx, 0.00397, [0, 0, 0, 0],
-                         [[0.0, 0.0], [0.1, 0.0], [0.0, 0.0], [0.0, 0.0]])
+        lbm = lbm_solver(Nx, Nx, 0.00796875, [0, 0, 0, 0],
+                         [[0.0, 0.0], [umax, 0.0], [0.0, 0.0], [0.0, 0.0]])
         lbm.solve()
 
         # Compare results with literature
@@ -194,20 +195,20 @@ if __name__ == '__main__':
         x_ref, v_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(6, 9))
 
         fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=200)
-        axes.plot(lbm.pass_to_py()[Nx // 2, :, 0] / 0.1, np.linspace(0, 1.0, Nx), 'b-', label='LBM')
+        axes.plot(lbm.pass_to_py()[Nx // 2, :, 0] / umax, np.linspace(0, 1.0, Nx), 'b-', label='LBM')
         axes.plot(u_ref, y_ref, 'rs', label='Ghia et al. 1982')
         axes.legend()
         axes.set_xlabel(r'$u_x$')
         axes.set_ylabel(r'$y$')
         plt.tight_layout()
-        plt.savefig("ux_Re3200_lowu.png")
+        plt.savefig("ux_Re3200_highres.png")
 
         plt.clf()
         fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=200)
-        axes.plot(np.linspace(0, 1.0, Nx), lbm.pass_to_py()[:, Nx // 2, 1] / 0.1, 'b-', label='LBM')
+        axes.plot(np.linspace(0, 1.0, Nx), lbm.pass_to_py()[:, Nx // 2, 1] / umax, 'b-', label='LBM')
         axes.plot(x_ref, v_ref, 'rs', label='Ghia et al. 1982')
         axes.legend()
         axes.set_xlabel(r'$u_x$')
         axes.set_ylabel(r'$y$')
         plt.tight_layout()
-        plt.savefig("uy_Re3200_lowu.png")
+        plt.savefig("uy_Re3200_highres.png")

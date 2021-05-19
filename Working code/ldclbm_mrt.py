@@ -13,7 +13,7 @@ path_name = "/Users/Jesper/Documents/MEP/Code/Working code/FiguresLDC/"
 
 steps = 50000
 umax = 0.1
-Nx = 128  # by convention, dx = dy = dt = 1.0 (lattice units)
+Nx = 10  # by convention, dx = dy = dt = 1.0 (lattice units)
 Ny = Nx
 nu = 0.0128
 tau = 3.0 * nu + 0.5
@@ -31,7 +31,7 @@ e = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1
 Pr = 0.021
 
 # Forces
-g = 9.81 * np.array([0, -1])
+g = 9.81 * np.array([0, -1]) * 0
 
 # Material
 cp = 381
@@ -48,7 +48,7 @@ Tm = 302.8          # Melting point (K)
 T0 = 302.67          # Starting temperature (K)
 TH = 305           # Hot wall temperature (K)
 TC = 301.3         # Cold wall temperature (K)
-epsilon = 0.05 * (TH - Tm) # 0.05 * (T_H - T_C)  # Width mushy zone (K)
+epsilon = 0.05 * (TH - Tm)  # 0.05 * (T_H - T_C)  # Width mushy zone (K)
 
 ##
 alpha = Pr / nu
@@ -99,10 +99,24 @@ def f_eq(rho, vel):
     return feq
 
 
-# @njit
+@njit
+def alpha_m(r, u, du, f):
+    aplha_m = np.zeros((Nx, Ny, 9))
+    alpha_m[:, :, 0] = r
+    alpha_m[:, :, 1] = r * u[:, :, 0] - f[:, :, 0] / 2
+    alpha_m[:, :, 2] = r * u[:, :, 1] - f[:, :, 1] / 2
+    alpha_m[:, :, 3] = 3 * r * u[:, :, 0] * u[:, :, 0] + r * (-6 * nu - 1) * du[:, :, 0] - 3
+    alpha_m[:, :, 4] =
+    alpha_m[:, :, 5] =
+    alpha_m[:, :, 6] =
+    alpha_m[:, :, 7] =
+    alpha_m[:, :, 8] =
+
+
 def initialize(g):
     rho = np.ones((Nx, Ny))
     vel = np.zeros((Nx, Ny, 2))
+    dvel = np.zeros((Nx, Ny, 2))
 
     f_new = f_eq(rho, vel)
     f_old = f_new.copy()
@@ -112,7 +126,7 @@ def initialize(g):
 
     T = np.zeros((Nx+2, Ny+2))
 
-    return vel, rho, f_new, f_old, Si, F, T
+    return vel, dvel, rho, f_new, f_old, Si, F, T
 
 
 @njit
@@ -144,37 +158,46 @@ def forcing(vel, g, Si, F, T):
     return Si, F
 
 
-@njit
-def temperature(T_old):
-    T_new = np.zeros((Nx+2, Ny+2))
-    for j in range(1, Ny+1):
-        for i in range(1, Nx+1):
-            while True:
-                n_iter = 1
-                while True:
-                    T_new[i, j] = T_old[i, j] * (1 - 6 * alpha) - 
+# @njit
+# def temperature(T_old):
+#     T_new = np.zeros((Nx+2, Ny+2))
+#     for j in range(1, Ny+1):
+#         for i in range(1, Nx+1):
+#             while True:
+#                 n_iter = 1
+#                 while True:
+#                     T_new[i, j] = T_old[i, j] * (1 - 6 * alpha) -
 
 
 
 @njit
-def moment_update(rho, vel, f_old, f_new, F):
+def moment_update(rho, vel, dvel, f_old, f_new, F):
     rho[:, :] = np.sum(f_new, axis=2)
     vel[:, :, 0] = (f_new[:, :, 1] + f_new[:, :, 5] + f_new[:, :, 8] - (f_new[:, :, 3] + f_new[:, :, 6] + f_new[:, :, 7])) / rho + F[:, :, 0] / 2
     vel[:, :, 1] = (f_new[:, :, 2] + f_new[:, :, 5] + f_new[:, :, 6] - (f_new[:, :, 4] + f_new[:, :, 7] + f_new[:, :, 8])) / rho + F[:, :, 1] / 2
 
     f_old = f_new
 
-    return rho, vel, f_old
+    # Velocity gradients
+    dvel[1:Nx-1, :, 0] = (vel[2:, :, 0] - vel[:Nx-2, :, 0]) / 2
+    dvel[0, :, 0] = (-3 * vel[0, :, 0] + 4 * vel[1, :, 0] - vel[2, :, 0]) / 2
+    dvel[Nx-1, :, 0] = (3 * vel[Nx-1, :, 0] - 4 * vel[Nx-2, :, 0] + vel[Nx-3, :, 0]) / 2
+    dvel[:, 1:Ny-1, 0] = (vel[:, 2:, 0] - vel[:, :Nx-2, 0]) / 2
+    dvel[:, 0, 0] = (-3 * vel[:, 0, 0] + 4 * vel[:, 1, 0] - vel[:, 2, 0]) / 2
+    dvel[:, Nx-1, 0] = (3 * vel[:, Nx-1, 0] - 4 * vel[:, Nx-2, 0] + vel[:, Nx-3, 0]) / 2
+
+    return rho, vel, dvel, f_old
 
 
 def solve():
-    vel, rho, f, f_old, Si, F, T = initialize(g)
+    vel, dvel, rho, f, f_old, Si, F, T = initialize(g)
 
     for i in range(steps):
         f_col = collision(rho, vel, f_old, Si)
         f_str = streaming(rho, f_old, f_col)
-        rho, vel, f_old = moment_update(rho, vel, f_old, f_str, F)
-        Si, F = forcing(vel, g, Si, F, T)
+        rho, vel, dvel, f_old = moment_update(rho, vel, dvel, f_old, f_str, F)
+
+        # Si, F = forcing(vel, g, Si, F, T)
 
         if i % 10000 == 0:
             print(i)

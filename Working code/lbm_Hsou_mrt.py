@@ -11,11 +11,11 @@ pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
 path_name = "/Users/Jesper/Documents/MEP/Code/Working code/FiguresLDC/"
 
-steps = 50000
+steps = 120000
 umax = 0.1
-Nx = 10  # by convention, dx = dy = dt = 1.0 (lattice units)
+Nx = 128  # by convention, dx = dy = dt = 1.0 (lattice units)
 Ny = Nx
-nu = 0.0128
+nu = 0.004
 tau = 3.0 * nu + 0.5
 tau_inv = 1.0 / tau
 bc_value = np.array([[0.0, 0.0], [umax, 0.0], [0.0, 0.0], [0.0, 0.0]], dtype=np.float32)
@@ -49,6 +49,8 @@ T0 = 302.67          # Starting temperature (K)
 TH = 305           # Hot wall temperature (K)
 TC = 301.3         # Cold wall temperature (K)
 epsilon = 0.05 * (TH - Tm)  # 0.05 * (T_H - T_C)  # Width mushy zone (K)
+Ts = Tm - epsilon
+Tl = Tm + epsilon
 
 ##
 alpha = Pr / nu
@@ -68,11 +70,11 @@ M = np.array([M_rho, M_e, M_eps, M_jx, M_qx, M_jy, M_qy, M_pxx, M_pyy])
 M_inv = np.dot(M.T, np.linalg.inv(np.dot(M, M.T)))
 
 s0 = 0
-s1 = 1.64
-s2 = 1.2
+s1 = 1.4
+s2 = 1.4
 s3 = 0
 s7 = 1 / tau
-s4 = 8 * ((2 - s7) / (8 - s7))
+s4 = 1.2 #8 * ((2 - s7) / (8 - s7))
 s5 = 0
 s6 = s4
 s8 = s7
@@ -99,24 +101,9 @@ def f_eq(rho, vel):
     return feq
 
 
-@njit
-def alpha_m(r, u, du, f):
-    aplha_m = np.zeros((Nx, Ny, 9))
-    alpha_m[:, :, 0] = r
-    alpha_m[:, :, 1] = r * u[:, :, 0] - f[:, :, 0] / 2
-    alpha_m[:, :, 2] = r * u[:, :, 1] - f[:, :, 1] / 2
-    alpha_m[:, :, 3] = 3 * r * u[:, :, 0] * u[:, :, 0] + r * (-6 * nu - 1) * du[:, :, 0] - 3
-    alpha_m[:, :, 4] =
-    alpha_m[:, :, 5] =
-    alpha_m[:, :, 6] =
-    alpha_m[:, :, 7] =
-    alpha_m[:, :, 8] =
-
-
 def initialize(g):
     rho = np.ones((Nx, Ny))
     vel = np.zeros((Nx, Ny, 2))
-    dvel = np.zeros((Nx, Ny, 2))
 
     f_new = f_eq(rho, vel)
     f_old = f_new.copy()
@@ -126,7 +113,7 @@ def initialize(g):
 
     T = np.zeros((Nx+2, Ny+2))
 
-    return vel, dvel, rho, f_new, f_old, Si, F, T
+    return vel, rho, f_new, f_old, Si, F, T
 
 
 @njit
@@ -158,44 +145,66 @@ def forcing(vel, g, Si, F, T):
     return Si, F
 
 
-# @njit
-# def temperature(T_old):
-#     T_new = np.zeros((Nx+2, Ny+2))
-#     for j in range(1, Ny+1):
-#         for i in range(1, Nx+1):
-#             while True:
-#                 n_iter = 1
-#                 while True:
-#                     T_new[i, j] = T_old[i, j] * (1 - 6 * alpha) -
+@njit
+def temperature(T_old, vel, fL_old, fL_iter, fL_new):
+    T_new = np.zeros((Nx+2, Ny+2))
+    n_iter_arr = np.zeros((Nx, Ny))
+    l_relax = 1.0
+    for j in range(1, Ny+1):
+        for i in range(1, Nx+1):
+            while True:
+                n_iter = 1
+                while True:
+                    T_new[i, j] = (1 - 6 * alpha) * T_old[i, j] + (2 * alpha - vel[i-1, j-1, 0]) * T_old[i+1, j] \
+                          + (2 * alpha + vel[i-1, j-1, 0]) * T_old[i-1, j] + (2 * alpha - vel[i-1, j-1, 1]) * T_old[i, j+1] \
+                          + (2 * alpha + vel[i-1, j-1, 1]) * T_old[i, j-1] + (vel[i-1, j-1, 1] / 4 + vel[i-1, j-1, 1] / 4 - alpha / 2) * T_old[i+1, j+1] \
+                          + (-vel[i-1, j-1, 0] / 4 + vel[i-1, j-1, 1] / 4 - alpha / 2) * T_old[i-1, j+1] + (vel[i-1, j-1, 0] / 4 - vel[i-1, j-1, 1] / 4 - alpha / 2) * T_old[i+1, j-1] \
+                          + (-vel[i-1, j-1, 0] / 4 - vel[i-1, j-1, 1] / 4 - alpha / 2) * T_old[i-1, j-1] - beta * Lat / cp * (fL_iter[i-1, j-1] - fL_old[i-1, j-1])
+
+                    T_prime = Ts + (Tl - Ts) * fL_iter[i-1, j-1]
+                    fL_new[i-1, j-1] = fL_iter[i-1, j-1] + l_relax * cp / Lat * (T_new[i, j] - T_prime)
+                    fL_new[i-1, j-1] = min(max(fL_new[i-1, j-1], 0), 1)
+
+                    if (np.abs(fL_new[i-1, j-1] - fL_iter[i-1, j-1]) < 1e-6) and (n_iter >= 3):
+                        n_iter_arr[i-1, j-1] = n_iter
+                        break
+                    # elif (n_iter > 100) and (l_relax == 1):
+                    #     l_relax = 0.1
+                    #     break
+                    else:
+                        fL_iter[i-1, j-1] = fL_new[i-1, j-1]
+
+                    n_iter += 1
+
+                if np.abs(fL_new[i-1, j-1] - fL_iter[i-1, j-1]) < 1e-6:
+                    break
+                else:
+                    continue
 
 
+
+
+
+T, fL = temperature(T, vel, fL, fL, fL)
 
 @njit
-def moment_update(rho, vel, dvel, f_old, f_new, F):
+def moment_update(rho, vel, f_old, f_new, F):
     rho[:, :] = np.sum(f_new, axis=2)
     vel[:, :, 0] = (f_new[:, :, 1] + f_new[:, :, 5] + f_new[:, :, 8] - (f_new[:, :, 3] + f_new[:, :, 6] + f_new[:, :, 7])) / rho + F[:, :, 0] / 2
     vel[:, :, 1] = (f_new[:, :, 2] + f_new[:, :, 5] + f_new[:, :, 6] - (f_new[:, :, 4] + f_new[:, :, 7] + f_new[:, :, 8])) / rho + F[:, :, 1] / 2
 
     f_old = f_new
 
-    # Velocity gradients
-    dvel[1:Nx-1, :, 0] = (vel[2:, :, 0] - vel[:Nx-2, :, 0]) / 2
-    dvel[0, :, 0] = (-3 * vel[0, :, 0] + 4 * vel[1, :, 0] - vel[2, :, 0]) / 2
-    dvel[Nx-1, :, 0] = (3 * vel[Nx-1, :, 0] - 4 * vel[Nx-2, :, 0] + vel[Nx-3, :, 0]) / 2
-    dvel[:, 1:Ny-1, 0] = (vel[:, 2:, 0] - vel[:, :Nx-2, 0]) / 2
-    dvel[:, 0, 0] = (-3 * vel[:, 0, 0] + 4 * vel[:, 1, 0] - vel[:, 2, 0]) / 2
-    dvel[:, Nx-1, 0] = (3 * vel[:, Nx-1, 0] - 4 * vel[:, Nx-2, 0] + vel[:, Nx-3, 0]) / 2
-
-    return rho, vel, dvel, f_old
+    return rho, vel, f_old
 
 
 def solve():
-    vel, dvel, rho, f, f_old, Si, F, T = initialize(g)
+    vel, rho, f, f_old, Si, F, T = initialize(g)
 
     for i in range(steps):
         f_col = collision(rho, vel, f_old, Si)
         f_str = streaming(rho, f_old, f_col)
-        rho, vel, dvel, f_old = moment_update(rho, vel, dvel, f_old, f_str, F)
+        rho, vel, f_old = moment_update(rho, vel, f_old, f_str, F)
 
         # Si, F = forcing(vel, g, Si, F, T)
 
@@ -213,8 +222,8 @@ stop = time.time()
 print(stop-start)
 
 # Compare results with literature
-y_ref, u_ref = np.loadtxt('ghia1982.dat', unpack=True, skiprows=2, usecols=(0, 2))
-x_ref, v_ref = np.loadtxt('ghia1982.dat', unpack=True, skiprows=2, usecols=(6, 8))
+y_ref, u_ref = np.loadtxt('ghia1982.dat', unpack=True, skiprows=2, usecols=(0, 3))
+x_ref, v_ref = np.loadtxt('ghia1982.dat', unpack=True, skiprows=2, usecols=(6, 9))
 
 fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=200)
 axes.plot(u[Nx // 2, :, 0] / umax, np.linspace(0, 1.0, Nx), 'b-', label='LBM')

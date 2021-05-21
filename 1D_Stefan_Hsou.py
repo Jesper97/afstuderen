@@ -5,12 +5,12 @@ import streaming as str
 import sys
 import time
 from matplotlib import cm
-from numba import njit, jit
+from numba import njit
 
 np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
-folder_nr = 'test2'
+folder_nr = '1d_stefan'
 
 # Define constants
 # # Physical parameters water
@@ -35,8 +35,8 @@ folder_nr = 'test2'
 # umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Physical parameters gallium
-Time = 1080         # (s)
-L = 0.0889             # Length of cavity (m)
+Time = 500         # (s)
+L = 0.01             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
 rho0 = 6.093e3      # Density (kg/m^3)
@@ -47,28 +47,30 @@ beta = 1.2e-4       # Thermal expansion (1/K)
 Lat = 8.016e5       # Latent heat (J/kg)
 c_p = 381           # Specific heat (J/(kgK))
 alpha = lbda / (rho0 * c_p)     # Thermal diffusivity (m^2/s)
+print("a", alpha)
 Tm = 302.8          # Melting point (K)
 
 # Domain parameters
-T0 = 301.3          # Starting temperature (K)
-T_H = 311           # Hot wall temperature (K)
-T_C = 301.3         # Hot wall temperature (K)
-epsilon = 0.05 * (T_H - T_C)  # Width mushy zone (K)
+T0 = 302.67          # Starting temperature (K)
+T_H = 305           # Hot wall temperature (K)
+T_C = 301.3         # Cold wall temperature (K)
+epsilon = 0.05 * (T_H - Tm) # 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * H)           # Maximal velocity
+print(umax)
 
 # Dimensionless numbers
 Re = umax * H / nu                                  # Reynolds number
 Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha)    # Rayleigh number
 print('Ra', Ra)
 Pr = nu / alpha                                     # Prandtl number
-print('Pr', Pr)
+Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.5005     # Even relaxation time
+tau_plus = 0.55     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Nx = 20             # Nodes in y-direction
-Ny = np.int(0.714*Nx)
+Nx = 40             # Nodes in y-direction
+Ny = 5 #np.int(0.714*Nx)
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -115,13 +117,16 @@ ux = np.zeros(dim)                 # Simulation velocity in x direction
 uy = np.zeros(dim)                 # Simulation velocity in y direction
 rho_sim = rho0_sim * np.ones(dim)  # Simulation density
 T_dim = np.zeros((Nx+2, Ny+2))     # Dimensionless simulation temperature
-f_l_ts = np.zeros(dim)                # Liquid fraction
+f_l = np.zeros(dim)                # Liquid fraction
 h = (c_p * T0) * np.ones(dim)        # Enthalpy
 c_app = c_p * np.ones(dim)
 
 # Temperature BCS
 T_dim_H = np.ones(Ny+2) * beta * (T_H - T0)
 T_dim_C = np.ones(Ny+2) * beta * (T_C - T0)
+
+# 1D Stefan problem
+xi = 0.02286148
 
 def easy_view(nr, arr):
     idx = ["idx" for i in arr[1, :]]
@@ -258,119 +263,38 @@ for t in range(Nt):
     ### Forcing
     T_dim_phys = T_dim[1:-1, 1:-1]                                          # Select only physical domain w/out ghost nodes
 
-    F_buoy = - (T_dim[1:-1, 1:-1, None] - np.mean(T_dim_phys)) * g_sim          # Calculate buoyancy force
-
-    ### Moment update
-    rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
-
-    B = (1 - f_l_ts) * (tau_plus - 1/2) / (f_l_ts + tau_plus - 1/2)               # Viscosity-dependent solid fraction
-    ux = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 0])    # Calculate x velocity (odd parts due to symmetry)
-    uy = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim + (1 - B[:, :]) / 2 * F_buoy[:, :, 1])    # Calculate y velocity (odd parts due to symmetry)
-
-    ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
-    uy[B == 1] = 0
-
-    ux_T = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim)    # Calculate x velocity (odd parts due to symmetry)
-    uy_T = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim)    # Calculate y velocity (odd parts due to symmetry)
-
-    ux_T[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
-    uy_T[B == 1] = 0
+    ux = 0 * T_dim_phys    # Calculate x velocity (odd parts due to symmetry)
+    uy = 0 * T_dim_phys   # Calculate y velocity (odd parts due to symmetry)
 
     ### Temperature
-    T_dim, f_l_ts = temperature(T_dim, f_l_ts, ux_T, uy_T, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
+    T_dim, h, c_app, f_l = temperature(T_dim, h, c_app, f_l, ux, uy, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
 
-    ### Equilibrium
-    f_eq_plus, f_eq_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)                                # Calculate new equilibrium distribution
-
-    ### Source
-    Si = force_source(ux, uy, F_buoy)                      # Calculate source term
-    Bi = np.repeat(B[:, :, np.newaxis], q, axis=2)                          # Repeat B in all directions to make next calc possible
-
-    ### Collision
-    f_star = f_plus * (1 - (1-Bi) / tau_plus) + f_minus * (1 - 2*Bi - (1-Bi) / tau_minus) + f_eq_plus * (1-Bi) / tau_plus + f_eq_minus * (1-Bi) / tau_minus + Si * (1-Bi)
-
-    ### Streaming
-    f_plus, f_minus = streaming(Nx, Ny, f_plus, f_minus, f_star)
-
-    if t % 2500 == 0:
+    ### Plots
+    if (t % 1000 == 0):
         print(t)
+        temp = t * Time / Nt
+        t_phys.append(temp)
 
-    # ### Plots
-    if (t % 15000 == 0):
-        ### Moment update
-        rho_sim = np.sum(f_plus, axis=2)                                        # Calculate density (even parts due to symmetry)
+        Xt = 2 * xi * np.sqrt(alpha * temp)
+        X_th.append(Xt)
 
-        B = (1 - f_l_ts) * (tau_plus - 1/2) / (f_l_ts + tau_plus - 1/2)               # Viscosity-dependent solid fraction
-        ux = 1 * (np.sum(f_minus[:, :] * c_i[:, 0], axis=2) / rho_sim)    # Calculate x velocity (odd parts due to symmetry)
-        uy = 1 * (np.sum(f_minus[:, :] * c_i[:, 1], axis=2) / rho_sim)    # Calculate y velocity (odd parts due to symmetry)
+        # easy_view(1, f_l)
+        # easy_view(2, T_dim / beta + T0)
+        half_f_l = np.abs(f_l[:, 2] - 0.5)
+        idx = half_f_l.argmin()
+        Xt_sim = (idx + 0.5) / Nx * L
+        X_sim.append(Xt_sim)
+    #
+    # if t % 5000 == 0:
+    #     plt.figure()
+    #     plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+    #     plt.xlabel('$x$ (# lattice nodes)')
+    #     plt.ylabel('$y$ (# lattice nodes)')
+    #     plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    #     plt.colorbar()
+    #     plt.show()
 
-        ux[np.round(B) == 1] = 0                                                # Force velocity in solid to zero
-        uy[B == 1] = 0
-
-        T = T_dim / beta + T0
-
-        easy_view(t, T)
-        easy_view(t, f_l_ts)
-        easy_view(t, uy)
-
-        # Liquid fraction
-        plt.figure()
-        plt.imshow(f_l_ts.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-        plt.xlabel('$x$ (# lattice nodes)')
-        plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_test.png")
-
-        # Velocities
-        plt.figure()
-        plt.clf()
-        plt.imshow(np.flip(uy, axis=1).T, cmap=cm.Blues)
-        plt.xlabel('$x$ (# lattice nodes)')
-        plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'Gallium \n $u_y$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        plt.colorbar()
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Ny}_test.png")
-
-        # plt.figure()
-        # plt.clf()
-        # plt.imshow(ux.T, cmap=cm.Blues, origin='lower')
-        # plt.xlabel('$x$ (# lattice nodes)')
-        # plt.ylabel('$y$ (# lattice nodes)')
-        # plt.title(f'Gallium \n $u_x$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_ux_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test.png")
-
-        # ## Temperature heatmap
-        # plt.figure()
-        # plt.clf()
-        # plt.imshow(np.flip(T[1:-1, 1:-1].T, axis=0), cmap=cm.Blues)
-        # plt.xlabel('$x$ (# lattice nodes)')
-        # plt.ylabel('$y$ (# lattice nodes)')
-        # plt.title(f'Gallium \n $T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_T_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test.png")
-
-        # plt.figure()
-        # plt.clf()
-        # plt.imshow(np.flip(rho_sim, axis=1).T, cmap=cm.Blues)
-        # plt.xlabel('$x$ (# lattice nodes)')
-        # plt.ylabel('$y$ (# lattice nodes)')
-        # plt.title(f'$\\rho$ in cavity with left wall at $T={T_H}K$')
-        # plt.colorbar()
-        # plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_rho_time{Time}_t={np.round(t/Nt*Time, decimals=3)}.png")
-
-        # Vector plot
-        plt.figure()
-        plt.quiver(Cu*ux.T, Cu*uy.T)
-        plt.xlabel('$x$ (# lattice nodes)')
-        plt.ylabel('$y$ (# lattice nodes)')
-        plt.title(f'Gallium \n $u$ in pipe with left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-        # plt.legend('Velocity vector')
-        plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/arrowplot_t={np.round(t/Nt*Time, decimals=3)}_N{Ny}_test.png")
-
-        plt.close('all')
-
+        # T = T_dim / beta + T0
 
 # Make arrays from lists
 t_phys = np.array(t_phys)
@@ -382,16 +306,16 @@ plt.plot(X_sim, t_phys)
 plt.xlabel('$x$ (m)')
 plt.ylabel('$t$ (s)')
 plt.title(f'Gallium \n Position of melting front, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_adv_form.png")
+plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Figures/hsource_trt-fsm_sq_cav{folder_nr}/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test.png")
 
 # Liquid fraction
 plt.figure()
-plt.imshow(f_l_ts.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
 plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
 plt.colorbar()
-plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_adv_form.png")
+plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test.png")
 
 stop = time.time()
 print(stop-start)

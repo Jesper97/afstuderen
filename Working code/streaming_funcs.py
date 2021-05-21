@@ -65,8 +65,8 @@ def top_bottom_wall(Nx, Ny, f_new, f_old, w, r, bc_value):
         f_new[i, j, 4] = f_old[i, j, 2]
         f_new[i, j, 5] = f_old[i - 1, j - 1, 5]
         f_new[i, j, 6] = f_old[i + 1, j - 1, 6]
-        f_new[i, j, 7] = f_old[i, j, 5] - 6 * w[5] * r[i, j] * bc_value[1, 0]
-        f_new[i, j, 8] = f_old[i, j, 6] + 6 * w[6] * r[i, j] * bc_value[1, 0]
+        f_new[i, j, 7] = f_old[i, j, 5] #- 6 * w[5] * r[i, j] * bc_value[1, 0]
+        f_new[i, j, 8] = f_old[i, j, 6] #+ 6 * w[6] * r[i, j] * bc_value[1, 0]
 
     return f_new
 
@@ -114,8 +114,8 @@ def top_corners(Nx, Ny, f_new, f_old, w, r, bc_value):
     f_new[i, j, 4] = f_old[i, j, 2]
     f_new[i, j, 5] = f_old[i - 1, j - 1, 5]
     f_new[i, j, 6] = f_old[i, j, 8]
-    f_new[i, j, 7] = f_old[i, j, 5] - 6 * w[5] * r[i, j] * bc_value[1, 0]
-    f_new[i, j, 8] = f_old[i, j, 6] + 6 * w[6] * r[i, j] * bc_value[1, 0]
+    f_new[i, j, 7] = f_old[i, j, 5] # - 6 * w[5] * r[i, j] * bc_value[1, 0]
+    f_new[i, j, 8] = f_old[i, j, 6] #+ 6 * w[6] * r[i, j] * bc_value[1, 0]
 
     # Top left corner
     i = 0
@@ -127,8 +127,8 @@ def top_corners(Nx, Ny, f_new, f_old, w, r, bc_value):
     f_new[i, j, 4] = f_old[i, j, 2]
     f_new[i, j, 5] = f_old[i, j, 7]
     f_new[i, j, 6] = f_old[i + 1, j - 1, 6]
-    f_new[i, j, 7] = f_old[i, j, 5] - 6 * w[5] * r[i, j] * bc_value[1, 0]
-    f_new[i, j, 8] = f_old[i, j, 6] + 6 * w[6] * r[i, j] * bc_value[1, 0]
+    f_new[i, j, 7] = f_old[i, j, 5] #- 6 * w[5] * r[i, j] * bc_value[1, 0]
+    f_new[i, j, 8] = f_old[i, j, 6] #+ 6 * w[6] * r[i, j] * bc_value[1, 0]
 
     return f_new
 

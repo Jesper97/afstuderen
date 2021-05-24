@@ -5,7 +5,7 @@ import math
 c_p = 381           # Specific heat (J/(kgK))
 Tm = 302.8          # Melting point (K)
 T_H = 311           # Hot wall temperature (K)
-Lat = 8.016e5       # Latent heat (J/kg)
+Lat = 8.016e4       # Latent heat (J/kg)
 
 St_l = c_p * (T_H - Tm) / Lat
 

@@ -6,7 +6,7 @@ sqrt = np.emath.sqrt
 
 Time = 400          # (s)
 L = 1/2 * 0.0889             # Length of cavity (m)
-H = 0.01 #0.714*L         # Height of cavity (m)
+H = 0.00714 #0.714*L         # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
 rho0 = 6.093e3      # Density (kg/m^3)
 lbda = 33           # Thermal conductivity (W/m K)

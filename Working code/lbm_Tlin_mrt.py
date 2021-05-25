@@ -26,6 +26,7 @@ beta_phys = 1.2e-4       # Thermal expansion (1/K)
 Lat_phys = 8.016e4       # Latent heat (J/kg)
 cp_phys = 381           # Specific heat (J/(kgK))
 alpha_phys = lbda_phys / (rho_phys * cp_phys)     # Thermal diffusivity (m^2/s)
+print(alpha_phys)
 Tm_phys = 302.78          # Melting point (K)
 g_vec_phys = g_phys * np.array([0, -1])
 
@@ -55,8 +56,8 @@ Ra = beta_phys * (TH_phys - T0_phys) * g_phys * H**3 / (nu_phys * alpha_phys)
 tau = 0.505
 tau_inv = 1/tau
 Nx = 80
-Ny = 3 #np.int(0.714*Nx)
-rho = 1
+Ny = np.int(0.714*Nx)
+rho0 = 1
 nu = cs**2 * (tau - 1/2)
 
 # Calculate dependent parameters
@@ -67,7 +68,7 @@ dx = L / Nx
 dt = cs**2 * (tau - 1/2) * dx**2 / nu_phys
 Cu = dx / dt
 Cg = dx / dt**2
-Crho = rho_phys / rho
+Crho = rho_phys / rho0
 Ch = dx**2 / dt**2
 Ccp = Ch * beta_phys
 Clbda = dx**4 / dt**3 * beta_phys * Crho
@@ -77,7 +78,7 @@ Nt = np.int(Time/dt)
 
 # Initial conditions
 dim = (Nx, Ny)
-rho = rho * np.ones(dim)  # Simulation density
+rho = rho0 * np.ones(dim)  # Simulation density
 T = np.zeros((Nx+2, Ny+2))     # Dimensionless simulation temperature
 fL = np.zeros(dim)                # Liquid fraction
 B = np.ones(dim)
@@ -100,9 +101,6 @@ g_vec = g_vec_phys / Cg
 TH = beta_phys * (TH_phys - T0_phys)
 TC = beta_phys * (TC_phys - T0_phys)
 
-# 1D Stefan problem
-xi = 0.02286148
-
 # Collision operators
 M_rho = np.ones(9)
 M_e = np.array([-4, -1, -1, -1, -1, 2, 2, 2, 2])
@@ -120,7 +118,7 @@ s0 = 0
 s1 = 1.4
 s2 = 1.4
 s3 = 0
-s7 = 1 / tau
+s7 = 1/tau
 s4 = 1.2 #8 * ((2 - s7) / (8 - s7))
 s5 = 0
 s6 = s4
@@ -128,6 +126,9 @@ s8 = s7
 S = np.diag(np.array([s0, s1, s2, s3, s4, s5, s6, s7, s8]))
 
 MSM = np.dot(M_inv, np.dot(S, M))
+
+# Stefan problem
+xi = 0.13870334
 
 print("Pr =", Pr)
 print("Ra =", Ra)
@@ -154,10 +155,10 @@ def initialize(g):
     f_new = f_eq(rho, vel, f)
     f_old = f_new.copy()
 
-    Si = np.zeros((Nx, Ny, 9))
-    F = rho[:, :, None] * g     # Need shape and values of rho, not physical
-
     T = np.zeros((Nx+2, Ny+2))
+
+    Si = np.zeros((Nx, Ny, 9))
+    F = T[1:-1, 1:-1, None] * rho[:, :, None] * g
 
     return vel, rho, f_new, f_old, Si, F, T
 
@@ -175,6 +176,7 @@ def streaming(rho, f_new, f_old):
 
 @njit
 def f_eq(rho, vel, feq):
+    feq = np.empty((Nx, Ny, 9))
     for j in range(Ny):
         for i in range(Nx):
             for k in range(9):
@@ -206,11 +208,12 @@ def forcing(vel, g, Si, F, T):
         for i in range(Nx):
             ip = i + 1
             jp = j + 1
-            F[i, j, 0] = - T[ip, jp] * g[0]
-            F[i, j, 1] = - T[ip, jp] * g[1]
+            F[i, j, 0] = - T[ip, jp] * g[0] * rho0
+            F[i, j, 1] = - T[ip, jp] * g[1] * rho0
             for k in range(9):
                 eF = F[i, j, 0]*e[k, 0]+F[i, j, 1]*e[k, 1]
-                Si[i, j, k] = (1 - 1/(2*tau)) * w[k] * (3 * eF + 9 * (vel[i, j, 0]*e[k, 0]+vel[i, j, 1]*e[k, 1]) * eF - \
+                Si[i, j, k] = (1 - 1/(2*tau)) * w[k] * (3 * eF +
+                                                        9 * (vel[i, j, 0]*e[k, 0]+vel[i, j, 1]*e[k, 1]) * eF -
                                                         3 * (vel[i, j, 0]*F[i, j, 0]+vel[i, j, 1]*F[i, j, 1]))
 
     return Si, F
@@ -307,23 +310,21 @@ def moment_update(rho, vel, f_new, F, B):
                 vel[i, j, 0] = 0
                 vel[i, j, 1] = 0
             else:
-                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j] + F[i, j, 0] / 2
-                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j] + F[i, j, 1] / 2
+                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j] + F[i, j, 0] / (2 * rho[i, j])
+                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j] + F[i, j, 1] / (2 * rho[i, j])
 
     return rho, vel, f_new
 
 
 def solve(h, c_app, fL, B):
     vel, rho, f_str, f_old, Si, F, T = initialize(g_vec)
-    xi = 0.13870334
     X_th = []
     X_sim = []
     t_phys = []
 
-    # Nt = 10
     for t in range(Nt):
         rho, vel, f_old = moment_update(rho, vel, f_str, F, B)
-        T, h, c_app, fL = temperature(T, h, c_app, fL, 0*vel[:, :, 0], 0*vel[:, :, 1], rho, TC, TH, t)
+        T, h, c_app, fL = temperature(T, h, c_app, fL, vel[:, :, 0], vel[:, :, 1], rho, TC, TH, t)
         Si, F = forcing(vel, g_vec, Si, F, T)
         B, f_col = collision(rho, vel, f_old, Si, fL)
         f_str = streaming(rho, f_old, f_col)
@@ -355,44 +356,44 @@ def solve(h, c_app, fL, B):
             ux_phys = vel[:, :, 0] * Cu
             uy_phys = vel[:, :, 1] * Cu
 
-            # # Liquid fraction
-            # plt.figure()
-            # plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-            # plt.xlabel('$x$ (# lattice nodes)')
-            # plt.ylabel('$y$ (# lattice nodes)')
-            # plt.title(f'Gallium \n $f_l$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            # plt.colorbar()
-            # plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
-            #
-            # # Velocities
-            # plt.figure()
-            # plt.clf()
-            # plt.imshow(np.flip(uy_phys, axis=1).T, cmap=cm.Blues)
-            # plt.xlabel('$x$ (# lattice nodes)')
-            # plt.ylabel('$y$ (# lattice nodes)')
-            # plt.title(f'Gallium \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            # plt.colorbar()
-            # plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
-            #
-            # plt.figure()
-            # plt.clf()
-            # plt.imshow(ux_phys.T, cmap=cm.Blues, origin='lower')
-            # plt.xlabel('$x$ (# lattice nodes)')
-            # plt.ylabel('$y$ (# lattice nodes)')
-            # plt.title(f'Gallium \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            # plt.colorbar()
-            # plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
-            #
-            # ## Temperature heatmap
-            # plt.figure()
-            # plt.clf()
-            # plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cm.Blues)
-            # plt.xlabel('$x$ (# lattice nodes)')
-            # plt.ylabel('$y$ (# lattice nodes)')
-            # plt.title(f'Gallium \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            # plt.colorbar()
-            # plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
-            #
+            # Liquid fraction
+            plt.figure()
+            plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+            plt.xlabel('$x$ (# lattice nodes)')
+            plt.ylabel('$y$ (# lattice nodes)')
+            plt.title(f'Gallium \n $f_l$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+            plt.colorbar()
+            plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
+
+            # Velocities
+            plt.figure()
+            plt.clf()
+            plt.imshow(np.flip(uy_phys, axis=1).T, cmap=cm.Blues)
+            plt.xlabel('$x$ (# lattice nodes)')
+            plt.ylabel('$y$ (# lattice nodes)')
+            plt.title(f'Gallium \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+            plt.colorbar()
+            plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
+
+            plt.figure()
+            plt.clf()
+            plt.imshow(ux_phys.T, cmap=cm.Blues, origin='lower')
+            plt.xlabel('$x$ (# lattice nodes)')
+            plt.ylabel('$y$ (# lattice nodes)')
+            plt.title(f'Gallium \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+            plt.colorbar()
+            plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
+
+            ## Temperature heatmap
+            plt.figure()
+            plt.clf()
+            plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cm.Blues)
+            plt.xlabel('$x$ (# lattice nodes)')
+            plt.ylabel('$y$ (# lattice nodes)')
+            plt.title(f'Gallium \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+            plt.colorbar()
+            plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
+
             # plt.figure()
             # plt.clf()
             # plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
@@ -401,38 +402,38 @@ def solve(h, c_app, fL, B):
             # plt.title(f'$\\rho$ in cavity with left wall at $T={TH}K$')
             # plt.colorbar()
             # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}_test1.png")
-            #
-            # # Vector plot
-            # plt.figure()
-            # plt.quiver(ux_phys.T, uy_phys.T)
-            # plt.xlabel('$x$ (# lattice nodes)')
-            # plt.ylabel('$y$ (# lattice nodes)')
-            # plt.title(f'Gallium \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            # # plt.legend('Velocity vector')
-            # plt.savefig(path_name + f"arrowplot_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
-            #
-            # plt.close('all')
 
-    # Make arrays from lists
-    t_phys = np.array(t_phys)
-    X_th = np.array(X_th)
-    X_sim = np.array(X_sim)
-    plt.figure()
-    plt.plot(X_th, t_phys)
-    plt.plot(X_sim, t_phys)
-    plt.xlabel('$x$ (m)')
-    plt.ylabel('$t$ (s)')
-    plt.title(f'Gallium \n Position of melting front, left wall at $T={TH}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    plt.savefig(path_name + f"x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
+            # Vector plot
+            plt.figure()
+            plt.quiver(ux_phys.T, uy_phys.T)
+            plt.xlabel('$x$ (# lattice nodes)')
+            plt.ylabel('$y$ (# lattice nodes)')
+            plt.title(f'Gallium \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+            # plt.legend('Velocity vector')
+            plt.savefig(path_name + f"arrowplot_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
 
-    # Liquid fraction
-    plt.figure()
-    plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-    plt.xlabel('$x$ (# lattice nodes)')
-    plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Gallium \n $f_l$, left wall at $T={TH}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    plt.colorbar()
-    plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
+            plt.close('all')
+
+    # # Make arrays from lists
+    # t_phys = np.array(t_phys)
+    # X_th = np.array(X_th)
+    # X_sim = np.array(X_sim)
+    # plt.figure()
+    # plt.plot(X_th, t_phys)
+    # plt.plot(X_sim, t_phys)
+    # plt.xlabel('$x$ (m)')
+    # plt.ylabel('$t$ (s)')
+    # plt.title(f'Gallium \n Position of melting front, left wall at $T={TH}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.savefig(path_name + f"x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
+    #
+    # # Liquid fraction
+    # plt.figure()
+    # plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes)')
+    # plt.title(f'Gallium \n $f_l$, left wall at $T={TH}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.colorbar()
+    # plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
 
     return vel
 

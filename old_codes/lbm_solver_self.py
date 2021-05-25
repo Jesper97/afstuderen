@@ -10,11 +10,11 @@ np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
 
-steps = 200000
+steps = 100000
 umax = 0.1
-nx = 256  # by convention, dx = dy = dt = 1.0 (lattice units)
+nx = 128  # by convention, dx = dy = dt = 1.0 (lattice units)
 ny = nx
-niu = 0.008
+niu = 0.0128
 tau = 3.0 * niu + 0.5
 inv_tau = 1.0 / tau
 rho = np.ones((nx, ny), dtype=np.float32)
@@ -199,7 +199,7 @@ def update_macro_var(rho, vel, f_old, f_new):
     return rho, vel, f_old
 
 
-# @njit
+@njit
 def solve(vel, rho, f_new, f_old):
     vel, rho, f, f_old = initialize(vel, rho, f_new, f_old)
 
@@ -207,9 +207,9 @@ def solve(vel, rho, f_new, f_old):
         f = streaming_and_collision(rho, vel, f_old, f)
         rho, vel, f_old = update_macro_var(rho, vel, f_old, f)
 
-        if i % 10000 == 0:
+        if i % 1000 == 0:
             print(i)
-            easy_view("ux", vel[:, :, 0])
+        #     easy_view("ux", vel[:, :, 0])
 
     # easy_view("ux", vel[:, :, 0])
     # easy_view(1, f[:, :, 1])
@@ -227,8 +227,8 @@ def solve(vel, rho, f_new, f_old):
 u = solve(vel, rho, f_new, f_old)
 
 # Compare results with literature
-y_ref, u_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(0, 3))
-x_ref, v_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(6, 9))
+y_ref, u_ref = np.loadtxt('/Users/Jesper/Documents/MEP/Code/Working code/data/ghia1982.dat', unpack=True, skiprows=2, usecols=(0, 2))
+x_ref, v_ref = np.loadtxt('/Users/Jesper/Documents/MEP/Code/Working code/data/ghia1982.dat', unpack=True, skiprows=2, usecols=(6, 8))
 
 fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=200)
 axes.plot(u[nx // 2, :, 0] / umax, np.linspace(0, 1.0, nx), 'b-', label='LBM')
@@ -237,7 +237,7 @@ axes.legend()
 axes.set_xlabel(r'$u_x$')
 axes.set_ylabel(r'$y$')
 plt.tight_layout()
-plt.savefig("ux_Re3200_test1.png")
+plt.savefig("/Users/Jesper/Documents/MEP/Code/Working code/Figures/ux_Re1000_test1.png")
 
 plt.clf()
 fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=200)
@@ -247,4 +247,4 @@ axes.legend()
 axes.set_xlabel(r'$u_x$')
 axes.set_ylabel(r'$y$')
 plt.tight_layout()
-plt.savefig("uy_Re3200_test1.png")
+plt.savefig("/Users/Jesper/Documents/MEP/Code/Working code/Figures/uy_Re1000_test1.png")

@@ -291,7 +291,7 @@ def upper_wall(Nx, Ny, f_plus, f_minus, f_star):
     return f_plus, f_minus
 
 @njit
-def lower_left_corner(f_plus, f_minus, f_star, w):
+def lower_left_corner(f_plus, f_minus, f_star):
     i = 0
     j = 0
     
@@ -350,7 +350,7 @@ def lower_left_corner(f_plus, f_minus, f_star, w):
     return f_plus, f_minus
 
 @njit
-def lower_right_corner(Nx, f_plus, f_minus, f_star, w):
+def lower_right_corner(Nx, f_plus, f_minus, f_star):
     i = Nx - 1
     j = 0
     
@@ -409,7 +409,7 @@ def lower_right_corner(Nx, f_plus, f_minus, f_star, w):
     return f_plus, f_minus
 
 @njit
-def upper_left_corner(Ny, f_plus, f_minus, f_star, w):
+def upper_left_corner(Ny, f_plus, f_minus, f_star):
     i = 0
     j = Ny - 1
     
@@ -468,7 +468,7 @@ def upper_left_corner(Ny, f_plus, f_minus, f_star, w):
     return f_plus, f_minus
 
 @njit
-def upper_right_corner(Nx, Ny, f_plus, f_minus, f_star, w):
+def upper_right_corner(Nx, Ny, f_plus, f_minus, f_star):
     i = Nx - 1
     j = Ny - 1
 

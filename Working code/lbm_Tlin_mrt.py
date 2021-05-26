@@ -230,12 +230,11 @@ def temperature(T_iter, h_old, c_app_iter, f_l_old, ux, uy, rho, T_dim_C, T_dim_
         ip = i + 1
         jp = j + 1
         a_app = lbda / (c_app[im, jm] * rho[im, jm])
-        T_new = T[i, j] * (1 - 6 * a_app) + T[i+1, j] * (-ux[im, jm] + 2 * a_app) + T[im, j] * (ux[im, jm] + 2 * a_app) + \
-            T[i, jp] * (-uy[im, jm] + 2 * a_app) + T[i, jp] * (uy[im, jm] + 2 * a_app) + \
-            T[ip, jp] * (ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) + \
-            T[im, jp] * (-ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) + \
-            T[ip, jm] * (ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + \
-            T[im, jm] * (-ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) - (h[im, jm] - h_old[im, jm]) / c_app[im, jm]
+        T_new = T[i, j] * (1 - 6 * a_app) + T[i, j-1] * (uy[im, jm] + 2 * a_app) + T[i, j+1] * (-uy[im, jm] + 2 * alpha) + \
+                T[i-1, j-1] * (-ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + T[i-1, j] * (ux[im, jm] + 2 * a_app) + \
+                T[i-1, j+1] * (-ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) + T[i+1, j-1] * (ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + \
+                T[i+1, j] * (-ux[im, jm] + 2 * a_app) + T[i+1, j+1] * (ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) - \
+                (h[im, jm] - h_old[im, jm]) / c_app[im, jm]
 
         return T_new
 

@@ -11,8 +11,8 @@ np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
 path_name = "/Users/Jesper/Documents/MEP/Code/Working code/Figures/"
-suffix = "_Ra105_test1.png"
-Nresponse = 250000
+suffix = "_Ra105_SRT2.png"
+Nresponse = 125000
 
 # # Physical parameters gallium
 # Time = 1140         # (s)
@@ -41,12 +41,13 @@ nu_phys = 1.568e-5
 beta_phys = 0.0034
 cp_phys = 1.0049e3
 alpha_phys = lbda_phys / (rho_phys * cp_phys)
+print(alpha_phys)
 g_vec_phys = g_phys * np.array([0, -1])
 
 # Setup parameters
 T0_phys = 302
-TH_phys = 303
-TC_phys = 301
+TH_phys = 302
+TC_phys = 302
 
 umax = 0.1
 bc_value = np.array([[0.0, 0.0], [umax, 0.0], [0.0, 0.0], [0.0, 0.0]], dtype=np.float32)
@@ -66,7 +67,7 @@ Pr = nu_phys / alpha_phys
 Ra = beta_phys * (TH_phys - TC_phys) * g_phys * H**3 / (nu_phys * alpha_phys)
 
 # Simulation parameters
-tau = 0.512
+tau = 0.524
 tau_inv = 1/tau
 Nx = 80
 Ny = Nx #np.int(0.714*Nx)
@@ -105,7 +106,8 @@ g_vec = g_vec_phys / Cg
 TH = beta_phys * (TH_phys - T0_phys)
 TC = beta_phys * (TC_phys - T0_phys)
 
-Ra_LB = (TH_phys - TC_phys) * g_phys
+Ra_LB = (TH - TC) * np.linalg.norm(g_vec) * Nx**3 / (nu * alpha)
+print("Ra_LB", Ra_LB)
 
 # Collision operators
 M_rho = np.ones(q)
@@ -197,15 +199,13 @@ def f_eq(rho, vel, feq):
 def collision_speedup(Omegaf, f, Si):
     Bi = np.zeros((Nx, Ny, q))
     f_new = f - Omegaf + Si
-    # easy_view("S2", Si[:, :, 2])
-    # easy_view("f2", f[:, :, 2])
-    # easy_view("f_new2", f_new[:, :, 2])
 
     return f_new
 
 
 def collision(r, u, f_old, Si):
-    Omegaf = np.einsum('ij,klj->kli', MSM, f_old - f_eq(r, u, f_old))
+    # Omegaf = np.einsum('ij,klj->kli', MSM, f_old - f_eq(r, u, f_old))
+    Omegaf = tau_inv * (f_old - f_eq(r, u, f_old))
     # return collision_speedup(Omegaf, f_old, Si)
     return f_old - Omegaf + Si
 
@@ -220,8 +220,8 @@ def forcing(vel, g, Si, F, T):
             jp = j + 1
             # F[i, j, 0] = - T[ip, jp] * g[0] * rho0
             # F[i, j, 1] = - T[ip, jp] * g[1] * rho0
-            F[i, j, 0] = - T[ip, jp] * g[0]
-            F[i, j, 1] = - T[ip, jp] * g[1]
+            F[i, j, 0] = - T[ip, jp] * g[0] * rho[i, j]
+            F[i, j, 1] = - T[ip, jp] * g[1] * rho[i, j]
             for k in range(q):
                 eF = F[i, j, 0]*e[k, 0]+F[i, j, 1]*e[k, 1]
                 Si[i, j, k] = (1 - 1/(2*tau)) * w[k] * (3 * eF +
@@ -241,12 +241,6 @@ def temperature(T_iter, c_app_iter, ux, uy, rho, T_dim_C, T_dim_H, t):
         ip = i + 1
         jp = j + 1
         a_app = lbda / (c_app[im, jm] * rho[im, jm])
-        # T_new = T[i, j] * (1 - 6 * a_app) + T[i+1, j] * (-ux[im, jm] + 2 * a_app) + T[im, j] * (ux[im, jm] + 2 * a_app) + \
-            # T[i, jp] * (-uy[im, jm] + 2 * a_app) + T[i, jp] * (uy[im, jm] + 2 * a_app) + \
-            # T[ip, jp] * (ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) + \
-            # T[im, jp] * (-ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) + \
-            # T[ip, jm] * (ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + \
-            # T[im, jm] * (-ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2)
         T_new = T[i, j] * (1 - 6 * a_app) + T[i, j-1] * (uy[im, jm] + 2 * a_app) + T[i, j+1] * (-uy[im, jm] + 2 * alpha) + \
                 T[i-1, j-1] * (-ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + T[i-1, j] * (ux[im, jm] + 2 * a_app) + \
                 T[i-1, j+1] * (-ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) + T[i+1, j-1] * (ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + \
@@ -279,8 +273,8 @@ def moment_update(rho, vel, f_new, F, B):
                 vel[i, j, 0] = 0
                 vel[i, j, 1] = 0
             else:
-                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j]# + F[i, j, 0] / (2 * rho[i, j])
-                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j]# + F[i, j, 1] / (2 * rho[i, j])
+                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j] + F[i, j, 0] / (2 * rho[i, j])
+                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j] + F[i, j, 1] / (2 * rho[i, j])
 
     return rho, vel, f_new
 
@@ -295,8 +289,7 @@ def solve(h, c_app, fL, B):
         f_col = collision(rho, vel, f_old, Si)
         f_str = streaming(rho, f_old, f_col)
 
-        if t == 20000:
-            pass
+        if t == 120000:
             # easy_view("f2", f_str[:, :, 2])
             # easy_view("f5", f_str[:, :, 5])
             # easy_view("f6", f_str[:, :, 6])
@@ -313,108 +306,132 @@ def solve(h, c_app, fL, B):
             # easy_view("S8", Si[:, :, 8])
             # easy_view("Fx", F[:, :, 0])
             # easy_view("Fy", F[:, :, 1])
-            # easy_view("vel", vel[:, :, 1])
+            # easy_view("vely", vel[:, :, 1])
+            # easy_view("vely.T", np.flip(vel[:, :, 1], axis=1))
+            # easy_view("velx", vel[:, :, 0])
+            pass
 
-        if t % 2500 == 1:
+        if t % 2500 == 0:
             print(t)
-            if t == 1:
+            if t == 0:
                 begin = time.time()
-            if t == 5001:
+            if t == 7500:
                 end = time.time()
-                runtime = (end - begin) * Nt / 5000
-                mins = np.int(runtime/60)
-                secs = np.int(runtime-60*mins)
-                print(f"Estimated runtime: {mins}:{secs} minutes.")
+                runtime = (end - begin) * Nt / 7500
+                mins = np.round(runtime/60, 1)
+                print(f"Estimated runtime: {mins} minutes.")
 
-        if t % Nresponse == 0 and t != 0:
-            T_phys = T / beta_phys + T0_phys
-            TH_phys = TH / beta_phys + T0_phys
-            ux_phys = vel[:, :, 0] * Cu * L / alpha_phys
-            uy_phys = vel[:, :, 1] * Cu * L / alpha_phys
+        # if t % Nresponse == 0 and t != 0:
+    T_phys = T / beta_phys + T0_phys
+    TH_phys = TH / beta_phys + T0_phys
+    ux_phys = vel[:, :, 0] * Cu * L / alpha_phys
+    uy_phys = vel[:, :, 1] * Cu * L / alpha_phys
 
-            print("u", np.max(ux_phys))
-            print("w", np.max(uy_phys))
+    print("u_LB", np.max(vel[:, :, 0]))
+    print("w_LB", np.max(vel[:, :, 1]))
+    print("u", np.max(ux_phys))
+    print("w", np.max(uy_phys))
 
 
-            # # Liquid fraction
-            # plt.figure()
-            # plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-            # plt.xlabel('$x$ (# lattice nodes)')
-            # plt.ylabel('$y$ (# lattice nodes)')
-            # plt.title(f'Gallium \n $f_l$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            # plt.colorbar()
-            # plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    # # Liquid fraction
+    # plt.figure()
+    # plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes)')
+    # plt.title(f'Gallium \n $f_l$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.colorbar()
+    # plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
-            # Streamlines velocity
-            plt.clf()
-            plt.figure()
-            ux = ux_phys.T
-            uy = np.flip(uy_phys, axis=1).T
-            x  = np.linspace(0, 1, Nx)
-            y  = np.linspace(0, 1, Ny)
-            u  = np.linspace(0, 1, 100)
-            g  = np.meshgrid(u,u)
-            str_pts = list(zip(*(x.flat for x in g)))
-            plt.streamplot(x, y, ux, uy,
-                           linewidth    = 1.5,
-                           cmap         = 'RdBu_r',
-                           arrowstyle   = '-',
-                           start_points = str_pts,
-                           density      = 3)
-            plt.xlabel('$x$ (# lattice nodes)')
-            plt.ylabel('$y$ (# lattice nodes)')
-            plt.savefig(path_name + f"streamlines_u_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-            plt.close()
+    # Streamlines velocity
+    uy_plot = np.rot90(uy_phys)
+    ux_plot = ux_phys.T
 
-            # Velocities
-            plt.figure()
-            plt.clf()
-            plt.imshow(np.flip(uy_phys, axis=1).T, cmap=cm.Blues)
-            plt.xlabel('$x$ (# lattice nodes)')
-            plt.ylabel('$y$ (# lattice nodes)')
-            plt.title(f'Gallium \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            plt.colorbar()
-            plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    plt.clf()
+    plt.figure()
+    x = np.linspace(0, 1, Nx)
+    y = np.linspace(0, 1, Ny)
+    u = np.linspace(0, 1, 100)
+    g = np.meshgrid(u, u)
+    str_pts = list(zip(*(x.flat for x in g)))
+    plt.streamplot(x, y, ux_plot, uy_plot,
+                   linewidth    = 1.5,
+                   cmap         = 'RdBu_r',
+                   arrowstyle   = '-',
+                   start_points = str_pts,
+                   density      = 3)
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.savefig(path_name + f"streamlines_u_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    plt.close()
 
-            plt.figure()
-            plt.clf()
-            plt.imshow(ux_phys.T, cmap=cm.Blues, origin='lower')
-            plt.xlabel('$x$ (# lattice nodes)')
-            plt.ylabel('$y$ (# lattice nodes)')
-            plt.title(f'Gallium \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            plt.colorbar()
-            plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    # Contour plots
+    X, Y = np.meshgrid(x, y)
+    plt.figure()
+    CS = plt.contour(X, Y, np.flip(uy_plot, axis=1))
+    plt.clabel(CS, inline=True)
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.title(f'Gallium \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.savefig(path_name + f"contour_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
-            ## Temperature heatmap
-            cmap = cm.get_cmap('PiYG', 11)
-            plt.figure()
-            plt.clf()
-            plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cmap)
-            plt.xlabel('$x$ (# lattice nodes)')
-            plt.ylabel('$y$ (# lattice nodes)')
-            plt.title(f'Gallium \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            plt.colorbar()
-            plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    plt.figure()
+    plt.clf()
+    CS = plt.contour(X, Y, ux_plot)
+    plt.clabel(CS, inline=True)
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.title(f'Gallium \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.savefig(path_name + f"contour_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
-            # plt.figure()
-            # plt.clf()
-            # plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
-            # plt.xlabel('$x$ (# lattice nodes)')
-            # plt.ylabel('$y$ (# lattice nodes)')
-            # plt.title(f'$\\rho$ in cavity with left wall at $T={TH}K$')
-            # plt.colorbar()
-            # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
+    # Velocities
+    plt.figure()
+    plt.clf()
+    plt.imshow(uy_plot, cmap=cm.Blues)
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes) ')
+    plt.title(f'Gallium \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.colorbar()
+    plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
-            # Vector plot
-            plt.figure()
-            plt.quiver(ux_phys.T, uy_phys.T)
-            plt.xlabel('$x$ (# lattice nodes)')
-            plt.ylabel('$y$ (# lattice nodes)')
-            plt.title(f'Gallium \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-            # plt.legend('Velocity vector')
-            plt.savefig(path_name + f"arrowplot_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    plt.figure()
+    plt.clf()
+    plt.imshow(ux_plot, cmap=cm.Blues, origin='lower')
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.title(f'Gallium \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.colorbar()
+    plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
-            plt.close('all')
+    ## Temperature heatmap
+    cmap = cm.get_cmap('PiYG', 11)
+    plt.figure()
+    plt.clf()
+    plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cmap)
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.title(f'Gallium \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.colorbar()
+    plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+
+    # plt.figure()
+    # plt.clf()
+    # plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes)')
+    # plt.title(f'$\\rho$ in cavity with left wall at $T={TH}K$')
+    # plt.colorbar()
+    # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
+
+    # Vector plot
+    plt.figure()
+    plt.quiver(ux_plot, 0*np.flip(uy_plot, axis=1))
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.title(f'Gallium \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.legend('Velocity vector')
+    plt.savefig(path_name + f"arrowplot_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+
+    plt.close('all')
 
     # # Make arrays from lists
     # t_phys = np.array(t_phys)

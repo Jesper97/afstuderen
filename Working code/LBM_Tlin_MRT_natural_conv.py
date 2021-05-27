@@ -11,7 +11,7 @@ np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
 path_name = "/Users/Jesper/Documents/MEP/Code/Working code/Figures/"
-suffix = "_Ra105_SRT2.png"
+suffix = "Ra10^5_MRT_Guo_Fuentes.png"
 Nresponse = 125000
 
 # # Physical parameters gallium
@@ -31,23 +31,32 @@ Nresponse = 125000
 # g_vec_phys = g_phys * np.array([0, -1])
 
 # Physical parameters air
-Time = 100
+Time = 200
 L = 0.0985125
 H = L
 g_phys = 9.81
-rho_phys = 1.284
-lbda_phys = 2.624e-2
-nu_phys = 1.568e-5
-beta_phys = 0.0034
-cp_phys = 1.0049e3
+
+## Pr = 0.71
+rho_phys = 0.9458
+lbda_phys = 0.03095
+nu_phys = 2.306e-5
+beta_phys = 0.0079743   #0.0034
+cp_phys = 1.009e3
+
+## Pr = 0.77
+# rho_phys = 1.284
+# lbda_phys = 2.624e-2
+# nu_phys = 1.568e-5
+# beta_phys = 0.0034
+# cp_phys = 1.0049e3
 alpha_phys = lbda_phys / (rho_phys * cp_phys)
 print(alpha_phys)
 g_vec_phys = g_phys * np.array([0, -1])
 
 # Setup parameters
 T0_phys = 302
-TH_phys = 302
-TC_phys = 302
+TH_phys = 302.5
+TC_phys = 301.5
 
 umax = 0.1
 bc_value = np.array([[0.0, 0.0], [umax, 0.0], [0.0, 0.0], [0.0, 0.0]], dtype=np.float32)
@@ -67,9 +76,9 @@ Pr = nu_phys / alpha_phys
 Ra = beta_phys * (TH_phys - TC_phys) * g_phys * H**3 / (nu_phys * alpha_phys)
 
 # Simulation parameters
-tau = 0.524
+tau = 0.56
 tau_inv = 1/tau
-Nx = 80
+Nx = 101
 Ny = Nx #np.int(0.714*Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -122,12 +131,24 @@ M_pyy = np.array([0, 0, 0, 0, 0, 1, -1, 1, -1])
 M = np.array([M_rho, M_e, M_eps, M_jx, M_qx, M_jy, M_qy, M_pxx, M_pyy])
 M_inv = np.dot(M.T, np.linalg.inv(np.dot(M, M.T)))
 
+# # Original
+# s0 = 0
+# s1 = 1.4
+# s2 = 1.4
+# s3 = 0
+# s7 = 1/tau
+# s4 = 1.2 #8 * ((2 - s7) / (8 - s7))
+# s5 = 0
+# s6 = s4
+# s8 = s7
+
+# Fuentes
 s0 = 0
-s1 = 1.4
-s2 = 1.4
+s1 = 1.64
+s2 = 1.2
 s3 = 0
 s7 = 1/tau
-s4 = 1.2 #8 * ((2 - s7) / (8 - s7))
+s4 = 8 * ((2 - s7) / (8 - s7))
 s5 = 0
 s6 = s4
 s8 = s7
@@ -204,8 +225,8 @@ def collision_speedup(Omegaf, f, Si):
 
 
 def collision(r, u, f_old, Si):
-    # Omegaf = np.einsum('ij,klj->kli', MSM, f_old - f_eq(r, u, f_old))
-    Omegaf = tau_inv * (f_old - f_eq(r, u, f_old))
+    Omegaf = np.einsum('ij,klj->kli', MSM, f_old - f_eq(r, u, f_old) - Si/2)
+    # Omegaf = tau_inv * (f_old - f_eq(r, u, f_old))
     # return collision_speedup(Omegaf, f_old, Si)
     return f_old - Omegaf + Si
 
@@ -218,16 +239,18 @@ def forcing(vel, g, Si, F, T):
         for i in range(Nx):
             ip = i + 1
             jp = j + 1
-            # F[i, j, 0] = - T[ip, jp] * g[0] * rho0
-            # F[i, j, 1] = - T[ip, jp] * g[1] * rho0
-            F[i, j, 0] = - T[ip, jp] * g[0] * rho[i, j]
-            F[i, j, 1] = - T[ip, jp] * g[1] * rho[i, j]
+            F[i, j, 0] = - T[ip, jp] * g[0] * rho0
+            F[i, j, 1] = - T[ip, jp] * g[1] * rho0
+            # F[i, j, 0] = - T[ip, jp] * g[0] * rho[i, j]
+            # F[i, j, 1] = - T[ip, jp] * g[1] * rho[i, j]
             for k in range(q):
                 eF = F[i, j, 0]*e[k, 0]+F[i, j, 1]*e[k, 1]
-                Si[i, j, k] = (1 - 1/(2*tau)) * w[k] * (3 * eF +
-                                                        9 * (vel[i, j, 0]*e[k, 0]+vel[i, j, 1]*e[k, 1]) * eF -
-                                                        3 * (vel[i, j, 0]*F[i, j, 0]+vel[i, j, 1]*F[i, j, 1]))
-
+                # Si[i, j, k] = (1 - 1/(2*tau)) * w[k] * (3 * eF +
+                #                                         9 * (vel[i, j, 0]*e[k, 0]+vel[i, j, 1]*e[k, 1]) * eF -
+                #                                         3 * (vel[i, j, 0]*F[i, j, 0]+vel[i, j, 1]*F[i, j, 1]))
+                Si[i, j, k] = w[k] * (3 * eF + 9 * (vel[i, j, 0]*e[k, 0]+vel[i, j, 1]*e[k, 1]) * eF -
+                                      3 * (vel[i, j, 0]*F[i, j, 0]+vel[i, j, 1]*F[i, j, 1]))
+                # Si[i, j, k] = 3 * w[k] * eF
     return Si, F
 
 
@@ -259,6 +282,10 @@ def temperature(T_iter, c_app_iter, ux, uy, rho, T_dim_C, T_dim_H, t):
     # T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
     T_new[-1, :] = 16/5 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
+    ####
+    # T_new[0, :] = 8/3 * T_dim_H - 2 * T_new[1, :] + T_new[2, :] / 3
+    # T_new[-1, :] = 8/3 * T_dim_C - 2 * T_new[-2, :] + T_new[-3, :] / 3
+
     return T_new
 
 
@@ -273,10 +300,26 @@ def moment_update(rho, vel, f_new, F, B):
                 vel[i, j, 0] = 0
                 vel[i, j, 1] = 0
             else:
-                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j] + F[i, j, 0] / (2 * rho[i, j])
-                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j] + F[i, j, 1] / (2 * rho[i, j])
+                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j] + F[i, j, 0] / (2 * rho0)
+                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j] + F[i, j, 1] / (2 * rho0)
 
     return rho, vel, f_new
+
+@njit
+def moment_plots(f_new, B):
+    rho = np.empty((Nx, Ny))
+    vel = np.empty((Nx, Ny, 2))
+    for j in range(Ny):
+        for i in range(Nx):
+            rho[i, j] = np.sum(f_new[i, j, :])
+            if B[i, j] == 1:
+                vel[i, j, 0] = 0
+                vel[i, j, 1] = 0
+            else:
+                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j]
+                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j]
+
+    return rho, vel
 
 
 def solve(h, c_app, fL, B):
@@ -289,30 +332,9 @@ def solve(h, c_app, fL, B):
         f_col = collision(rho, vel, f_old, Si)
         f_str = streaming(rho, f_old, f_col)
 
-        if t == 120000:
-            # easy_view("f2", f_str[:, :, 2])
-            # easy_view("f5", f_str[:, :, 5])
-            # easy_view("f6", f_str[:, :, 6])
-            # easy_view("f4", f_str[:, :, 4])
-            # easy_view("f7", f_str[:, :, 7])
-            # easy_view("f8", f_str[:, :, 8])
-            # easy_view("S1", Si[:, :, 1])
-            # easy_view("S2", Si[:, :, 2])
-            # easy_view("S3", Si[:, :, 3])
-            # easy_view("S4", Si[:, :, 4])
-            # easy_view("S5", Si[:, :, 5])
-            # easy_view("S6", Si[:, :, 6])
-            # easy_view("S7", Si[:, :, 7])
-            # easy_view("S8", Si[:, :, 8])
-            # easy_view("Fx", F[:, :, 0])
-            # easy_view("Fy", F[:, :, 1])
-            # easy_view("vely", vel[:, :, 1])
-            # easy_view("vely.T", np.flip(vel[:, :, 1], axis=1))
-            # easy_view("velx", vel[:, :, 0])
-            pass
-
         if t % 2500 == 0:
             print(t)
+            print(np.max(np.sqrt(vel[:, :, 0]**2+vel[:, :, 1]**2)))
             if t == 0:
                 begin = time.time()
             if t == 7500:
@@ -322,6 +344,8 @@ def solve(h, c_app, fL, B):
                 print(f"Estimated runtime: {mins} minutes.")
 
         # if t % Nresponse == 0 and t != 0:
+
+    rho, vel = moment_plots(f_str, B)
     T_phys = T / beta_phys + T0_phys
     TH_phys = TH / beta_phys + T0_phys
     ux_phys = vel[:, :, 0] * Cu * L / alpha_phys
@@ -329,6 +353,8 @@ def solve(h, c_app, fL, B):
 
     print("u_LB", np.max(vel[:, :, 0]))
     print("w_LB", np.max(vel[:, :, 1]))
+    print("u_LB-", np.min(vel[:, :, 0]))
+    print("w_LB-", np.min(vel[:, :, 1]))
     print("u", np.max(ux_phys))
     print("w", np.max(uy_phys))
 
@@ -413,18 +439,18 @@ def solve(h, c_app, fL, B):
     plt.colorbar()
     plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
-    # plt.figure()
-    # plt.clf()
-    # plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'$\\rho$ in cavity with left wall at $T={TH}K$')
-    # plt.colorbar()
-    # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
+    plt.figure()
+    plt.clf()
+    plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.title(f'$\\rho$ in cavity with left wall at $T={TH}K$')
+    plt.colorbar()
+    plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
     # Vector plot
     plt.figure()
-    plt.quiver(ux_plot, 0*np.flip(uy_plot, axis=1))
+    plt.quiver(ux_plot, np.flip(uy_plot, axis=1))
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
     plt.title(f'Gallium \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
@@ -464,21 +490,6 @@ u = solve(h, c_app, fL, B)
 stop = time.time()
 print(stop-start)
 
-# # Stefan problem
-# min_3 = np.array([[0.011058988764044946, 0.0891256345177665],
-#                   [0.011058988764044946, 0.08596675126903555],
-#                   [0.010999531835205996, 0.08055152284263961],
-#                   [0.010404962546816481, 0.0735568527918782],
-#                   [0.00986985018726592, 0.06498274111675129],
-#                   [0.009572565543071164, 0.05663426395939088],
-#                   [0.009453651685393262, 0.048511421319796966],
-#                   [0.009275280898876406, 0.04050139593908632],
-#                   [0.009215823970037455, 0.032717005076142155],
-#                   [0.008799625468164795, 0.024142893401015247],
-#                   [0.008442883895131089, 0.01624568527918782],
-#                   [0.008205056179775282, 0.008912563451776656],
-#                   [0.008086142322097381, 0.004287055837563461]])
-#
 # # Compare results with literature
 # y_ref, u_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(0, 2))
 # x_ref, v_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(6, 8))

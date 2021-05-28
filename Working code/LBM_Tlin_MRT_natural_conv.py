@@ -31,7 +31,7 @@ Nresponse = 125000
 # g_vec_phys = g_phys * np.array([0, -1])
 
 # Physical parameters air
-Time = 200
+Time = 100
 L = 0.0985125
 H = L
 g_phys = 9.81
@@ -76,9 +76,9 @@ Pr = nu_phys / alpha_phys
 Ra = beta_phys * (TH_phys - TC_phys) * g_phys * H**3 / (nu_phys * alpha_phys)
 
 # Simulation parameters
-tau = 0.56
+tau = 0.55
 tau_inv = 1/tau
-Nx = 101
+Nx = 80
 Ny = Nx #np.int(0.714*Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -152,7 +152,8 @@ s4 = 8 * ((2 - s7) / (8 - s7))
 s5 = 0
 s6 = s4
 s8 = s7
-S = np.diag(np.array([s0, s1, s2, s3, s4, s5, s6, s7, s8]))
+S = np.diag(np.array([s0, s1, s2, s3, s4, s5, s6, s7, s8]))     # MRT
+# S = np.diag(np.ones(q) * tau_inv)                             # SRT
 
 MSM = np.dot(M_inv, np.dot(S, M))
 
@@ -213,22 +214,73 @@ def f_eq(rho, vel, feq):
                 uc = e[k, 0] * vel[i, j, 0] + e[k, 1] * vel[i, j, 1]
                 feq[i, j, k] = w[k] * rho[i, j] * (1.0 + 3.0 * uc + 4.5 * uc*uc -
                                                    1.5 * (vel[i, j, 0]*vel[i, j, 0] + vel[i, j, 1]*vel[i, j, 1]))
+
     return feq
 
 
 @njit
-def collision_speedup(Omegaf, f, Si):
-    Bi = np.zeros((Nx, Ny, q))
-    f_new = f - Omegaf + Si
+def m_eq(rho, vel, F):
+    feq = np.empty((Nx, Ny, q))
+    for j in range(Ny):
+        for i in range(Nx):
+            # for k in range(q):
+            #     uc = e[k, 0] * vel[i, j, 0] + e[k, 1] * vel[i, j, 1]
+            #     feq[i, j, k] = w[k] * rho[i, j] * (1.0 + 3.0 * uc + 4.5 * uc*uc -
+            #                                        1.5 * (vel[i, j, 0]*vel[i, j, 0] + vel[i, j, 1]*vel[i, j, 1]))
+
+            ####
+            # vel[i, j, 1] += F[i, j, 1] / (2 * rho0)
+            feq[i, j, 0] = rho[i, j]
+            feq[i, j, 1] = -2 * rho[i, j] + 3 * (vel[i, j, 0]**2 + vel[i, j, 1]**2)
+            feq[i, j, 2] = rho[i, j] - 3 * (vel[i, j, 0]**2 + vel[i, j, 1]**2)
+            feq[i, j, 3] = rho[i, j] * vel[i, j, 0]
+            feq[i, j, 4] = - rho[i, j] * vel[i, j, 0]
+            ####
+            feq[i, j, 5] = rho[i, j] * vel[i, j, 1] + F[i, j, 1] / (2 * rho0)
+            feq[i, j, 6] = - rho[i, j] * vel[i, j, 1] - F[i, j, 1] / 2
+            feq[i, j, 7] = (vel[i, j, 0]**2 - vel[i, j, 1]**2)
+            feq[i, j, 8] = (vel[i, j, 0] * vel[i, j, 1])
+
+            # feq[i, j, 6] -= F[i, j, 1] / 2
+
+    return feq
+
+
+@njit
+def collision(r, u, f_old, Si, F):
+    # Omegaf = np.einsum('ij,klj->kli', MSM, f_old - f_eq(r, u, f_old) - Si/2)
+    # Omegaf = tau_inv * (f_old - f_eq(r, u, f_old))
+
+    #####
+    m_new = np.empty((Nx, Ny, q))
+    m_old = np.empty((Nx, Ny, q))
+    f_new = np.empty((Nx, Ny, q))
+    MF = np.empty((Nx, Ny, q))
+    meq = m_eq(r, u, F)
+
+    for j in range(Ny):
+        for i in range(Nx):
+            m_old[i, j, :] = np.dot(M, f_old[i, j, :])
+            MF[i, j, :] = np.dot(M, Si[i, j, :])
+
+    m_old[:, :, 5] += F[:, :, 1] / 2
+    m_old[:, :, 6] -= F[:, :, 1] / 2
+
+    for j in range(Ny):
+        for i in range(Nx):
+            for k in range(q):
+                # m_new[i, j, k] = m_old[i, j, k] - S[k, k] * (m_old[i, j, k] - meq[i, j, k]) + (1 - S[k, k] / 2) * MF[i, j, k]
+                m_new[i, j, k] = m_old[i, j, k] - S[k, k] * (m_old[i, j, k] - meq[i, j, k])
+
+    m_new[:, :, 5] += F[:, :, 1] / 2
+    m_new[:, :, 6] -= F[:, :, 1] / 2
+
+    for j in range(Ny):
+        for i in range(Nx):
+            f_new[i, j, :] = np.dot(M_inv, m_new[i, j, :])
 
     return f_new
-
-
-def collision(r, u, f_old, Si):
-    Omegaf = np.einsum('ij,klj->kli', MSM, f_old - f_eq(r, u, f_old) - Si/2)
-    # Omegaf = tau_inv * (f_old - f_eq(r, u, f_old))
-    # return collision_speedup(Omegaf, f_old, Si)
-    return f_old - Omegaf + Si
+    # return f_old - Omegaf + Si
 
 
 @njit
@@ -241,8 +293,6 @@ def forcing(vel, g, Si, F, T):
             jp = j + 1
             F[i, j, 0] = - T[ip, jp] * g[0] * rho0
             F[i, j, 1] = - T[ip, jp] * g[1] * rho0
-            # F[i, j, 0] = - T[ip, jp] * g[0] * rho[i, j]
-            # F[i, j, 1] = - T[ip, jp] * g[1] * rho[i, j]
             for k in range(q):
                 eF = F[i, j, 0]*e[k, 0]+F[i, j, 1]*e[k, 1]
                 # Si[i, j, k] = (1 - 1/(2*tau)) * w[k] * (3 * eF +
@@ -278,13 +328,13 @@ def temperature(T_iter, c_app_iter, ux, uy, rho, T_dim_C, T_dim_H, t):
     # Ghost nodes
     T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
     T_new[1:-1, -1] = 21/23 * T_new[1:-1, -2] + 3/23 * T_new[1:-1, -3] - 1/23 * T_new[1:-1, -4]     # Neumann extrapolation on upper boundary
-    T_new[0, :] = 16/5 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
+    # T_new[0, :] = 16/5 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
     # T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
-    T_new[-1, :] = 16/5 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
+    # T_new[-1, :] = 16/5 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
     ####
-    # T_new[0, :] = 8/3 * T_dim_H - 2 * T_new[1, :] + T_new[2, :] / 3
-    # T_new[-1, :] = 8/3 * T_dim_C - 2 * T_new[-2, :] + T_new[-3, :] / 3
+    T_new[0, :] = 8/3 * T_dim_H - 2 * T_new[1, :] + T_new[2, :] / 3
+    T_new[-1, :] = 8/3 * T_dim_C - 2 * T_new[-2, :] + T_new[-3, :] / 3
 
     return T_new
 
@@ -300,10 +350,11 @@ def moment_update(rho, vel, f_new, F, B):
                 vel[i, j, 0] = 0
                 vel[i, j, 1] = 0
             else:
-                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j] + F[i, j, 0] / (2 * rho0)
-                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j] + F[i, j, 1] / (2 * rho0)
+                vel[i, j, 0] = (f_new[i, j, 1] + f_new[i, j, 5] + f_new[i, j, 8] - (f_new[i, j, 3] + f_new[i, j, 6] + f_new[i, j, 7])) / rho[i, j]# + F[i, j, 0] / (2 * rho0)
+                vel[i, j, 1] = (f_new[i, j, 2] + f_new[i, j, 5] + f_new[i, j, 6] - (f_new[i, j, 4] + f_new[i, j, 7] + f_new[i, j, 8])) / rho[i, j]# + F[i, j, 1] / (2 * rho0)
 
     return rho, vel, f_new
+
 
 @njit
 def moment_plots(f_new, B):
@@ -325,11 +376,12 @@ def moment_plots(f_new, B):
 def solve(h, c_app, fL, B):
     vel, rho, f_str, f_old, Si, F, T = initialize(g_vec)
 
+    # Nt = 3
     for t in range(Nt):
         rho, vel, f_old = moment_update(rho, vel, f_str, F, B)
         T = temperature(T, c_app, vel[:, :, 0], vel[:, :, 1], rho, TC, TH, t)
         Si, F = forcing(vel, g_vec, Si, F, T)
-        f_col = collision(rho, vel, f_old, Si)
+        f_col = collision(rho, vel, f_old, Si, F)
         f_str = streaming(rho, f_old, f_col)
 
         if t % 2500 == 0:

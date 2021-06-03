@@ -26,18 +26,32 @@ beta_phys = 1.2e-4       # Thermal expansion (1/K)
 Lat_phys = 8.016e4       # Latent heat (J/kg)
 cp_phys = 381           # Specific heat (J/(kgK))
 alpha_phys = lbda_phys / (rho_phys * cp_phys)     # Thermal diffusivity (m^2/s)
-print(alpha_phys)
 Tm_phys = 302.78          # Melting point (K)
 g_vec_phys = g_phys * np.array([0, -1])
 
-# Setup parameters
-T0_phys = 301.3
-TH_phys = 311
-TC_phys = 301.3
-epsilon = 0.01 * (TH_phys - Tm_phys)
+# # Domain parameters
+# Time = 100         # (s)
+# L = 0.1             # Length of cavity (m)
+# H = L               # Height of cavity (m)
+# g_phys = 9.81
+# g_vec_phys = np.array([0, -g_phys])
 
-umax = 0.1
-bc_value = np.array([[0.0, 0.0], [umax, 0.0], [0.0, 0.0], [0.0, 0.0]], dtype=np.float32)
+# # Material parameters octadecane
+# rho_phys = 771
+# cp_phys = 2250
+# lbda_phys = 0.15
+# mu_phys = 3.26e-3
+# nu_phys = 4.23e-6
+# alpha_phys = 8.647e-5
+# beta_phys = 8.74e-4
+# Lat_phys = 236.98e3
+# Tm_phys = 301.13
+
+# Setup parameters
+T0_phys = 301
+TH_phys = 312
+TC_phys = 301
+epsilon = 0.01 * (TH_phys - Tm_phys)
 
 # LBM parameters
 w0 = 4/9
@@ -127,9 +141,6 @@ S = np.diag(np.array([s0, s1, s2, s3, s4, s5, s6, s7, s8]))
 
 MSM = np.dot(M_inv, np.dot(S, M))
 
-# Stefan problem
-xi = 0.13870334
-
 print("Pr =", Pr)
 print("Ra =", Ra)
 print("dx =", dx, "dt =", dt)
@@ -164,12 +175,12 @@ def initialize(g):
 
 
 @njit
-def streaming(rho, f_new, f_old):
+def streaming(f_new, f_old):
     f = str.fluid(Nx, Ny, e, f_new, f_old)
     f = str.left_right_wall(Nx, Ny, f, f_old)
-    f = str.top_bottom_wall(Nx, Ny, f, f_old, w, rho, bc_value)
+    f = str.top_bottom_wall(Nx, Ny, f, f_old)
     f = str.bottom_corners(Nx, Ny, f, f_old)
-    f = str.top_corners(Nx, Ny, f, f_old, w, rho, bc_value)
+    f = str.top_corners(Nx, Ny, f, f_old)
 
     return f
 
@@ -230,10 +241,10 @@ def temperature(T_iter, h_old, c_app_iter, f_l_old, ux, uy, rho, T_dim_C, T_dim_
         ip = i + 1
         jp = j + 1
         a_app = lbda / (c_app[im, jm] * rho[im, jm])
-        T_new = T[i, j] * (1 - 6 * a_app) + T[i, j-1] * (uy[im, jm] + 2 * a_app) + T[i, j+1] * (-uy[im, jm] + 2 * alpha) + \
-                T[i-1, j-1] * (-ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + T[i-1, j] * (ux[im, jm] + 2 * a_app) + \
-                T[i-1, j+1] * (-ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) + T[i+1, j-1] * (ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + \
-                T[i+1, j] * (-ux[im, jm] + 2 * a_app) + T[i+1, j+1] * (ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) - \
+        T_new = T[i, j] * (1 - 6 * a_app) + T[i, jm] * (uy[im, jm] + 2 * a_app) + T[i, jp] * (-uy[im, jm] + 2 * alpha) + \
+                T[im, jm] * (-ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + T[im, j] * (ux[im, jm] + 2 * a_app) + \
+                T[im, jp] * (-ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) + T[i+1, jm] * (ux[im, jm] / 4 - uy[im, jm] / 4 - a_app / 2) + \
+                T[ip, j] * (-ux[im, jm] + 2 * a_app) + T[ip, jp] * (ux[im, jm] / 4 + uy[im, jm] / 4 - a_app / 2) - \
                 (h[im, jm] - h_old[im, jm]) / c_app[im, jm]
 
         return T_new

@@ -35,7 +35,7 @@ folder_nr = '1d_stefan'
 # umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Physical parameters gallium
-Time = 1000         # (s)
+Time = 500         # (s)
 L = 0.01             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
@@ -56,7 +56,6 @@ T_H = 305           # Hot wall temperature (K)
 T_C = 301.3         # Cold wall temperature (K)
 epsilon = 0.05 * (T_H - Tm) # 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * H)           # Maximal velocity
-print(umax)
 
 # Dimensionless numbers
 Re = umax * H / nu                                  # Reynolds number
@@ -186,6 +185,7 @@ def force_source(ux, uy, F):
 
     return Si
 
+
 @njit
 def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux_sim, uy_sim, t, T_dim_C, T_dim_H):
     T_new = np.zeros((Nx+2, Ny+2))
@@ -230,10 +230,8 @@ def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux_sim, uy_sim, t, T_dim_C
 
             h_new = h_iter + l_relax * c_app_iter * (T_new[1:-1, 1:-1] - T_iter[1:-1, 1:-1])
 
-            # if t == 1:
-            #     print("h_tot", sum(sum(h_new)))
-            #     easy_view("T1", T_new)
-            #     easy_view("h_new", h_new)
+            # easy_view("T1", T_new)
+            # easy_view("h_new", h_new)
 
             for j in range(1, Ny+1):
                 for i in range(1, Nx+1):
@@ -261,10 +259,9 @@ def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux_sim, uy_sim, t, T_dim_C
             T_new[0, :] = 16/5 * T_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
             # T_new[-1, :] = 16/5 * T_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-            # if t == 1:
-            #     easy_view("T2", T_new)
-            #     easy_view("c_app", c_app)
-            #     easy_view("f_l", f_l)
+            # easy_view("T2", T_new)
+            # easy_view("c_app", c_app)
+            # easy_view("f_l", f_l)
 
             if np.any(np.abs(f_l - f_l_iter)) < 1e-5:
                 break
@@ -285,7 +282,6 @@ def temperature(T_old_dim, h_old, c_app_old, f_l_old, ux_sim, uy_sim, t, T_dim_C
             break
         else:
             continue
-
 
     if t % 1000 == 0:
         print(t)

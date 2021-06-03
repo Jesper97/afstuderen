@@ -1,5 +1,6 @@
 from numba import njit
 
+
 @njit
 def fluid(Nx, Ny, e, f_new, f_old):
     for j in range(1, Ny-1):
@@ -42,7 +43,7 @@ def left_right_wall(Nx, Ny, f_new, f_old):
 
 
 @njit
-def top_bottom_wall(Nx, Ny, f_new, f_old, w, r, bc_value):
+def top_bottom_wall(Nx, Ny, f_new, f_old):
     for i in range(1, Nx-1):
         # Bottom wall
         j = 0
@@ -65,8 +66,8 @@ def top_bottom_wall(Nx, Ny, f_new, f_old, w, r, bc_value):
         f_new[i, j, 4] = f_old[i, j, 2]
         f_new[i, j, 5] = f_old[i - 1, j - 1, 5]
         f_new[i, j, 6] = f_old[i + 1, j - 1, 6]
-        f_new[i, j, 7] = f_old[i, j, 5] # - 6 * w[5] * r[i, j] * bc_value[1, 0]
-        f_new[i, j, 8] = f_old[i, j, 6] # + 6 * w[6] * r[i, j] * bc_value[1, 0]
+        f_new[i, j, 7] = f_old[i, j, 5]
+        f_new[i, j, 8] = f_old[i, j, 6]
 
     return f_new
 
@@ -103,7 +104,7 @@ def bottom_corners(Nx, Ny, f_new, f_old):
 
 
 @njit
-def top_corners(Nx, Ny, f_new, f_old, w, r, bc_value):
+def top_corners(Nx, Ny, f_new, f_old):
     # Top right corner
     i = Nx - 1
     j = Ny - 1
@@ -114,8 +115,8 @@ def top_corners(Nx, Ny, f_new, f_old, w, r, bc_value):
     f_new[i, j, 4] = f_old[i, j, 2]
     f_new[i, j, 5] = f_old[i - 1, j - 1, 5]
     f_new[i, j, 6] = f_old[i, j, 8]
-    f_new[i, j, 7] = f_old[i, j, 5] # - 6 * w[5] * r[i, j] * bc_value[1, 0]
-    f_new[i, j, 8] = f_old[i, j, 6] # + 6 * w[6] * r[i, j] * bc_value[1, 0]
+    f_new[i, j, 7] = f_old[i, j, 5]
+    f_new[i, j, 8] = f_old[i, j, 6]
 
     # Top left corner
     i = 0
@@ -127,8 +128,8 @@ def top_corners(Nx, Ny, f_new, f_old, w, r, bc_value):
     f_new[i, j, 4] = f_old[i, j, 2]
     f_new[i, j, 5] = f_old[i, j, 7]
     f_new[i, j, 6] = f_old[i + 1, j - 1, 6]
-    f_new[i, j, 7] = f_old[i, j, 5] # - 6 * w[5] * r[i, j] * bc_value[1, 0]
-    f_new[i, j, 8] = f_old[i, j, 6] # + 6 * w[6] * r[i, j] * bc_value[1, 0]
+    f_new[i, j, 7] = f_old[i, j, 5]
+    f_new[i, j, 8] = f_old[i, j, 6]
 
     return f_new
 

@@ -35,7 +35,7 @@ folder_nr = '1d_stefan'
 # umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Physical parameters gallium
-Time = 1000         # (s)
+Time = 500         # (s)
 L = 0.01             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)

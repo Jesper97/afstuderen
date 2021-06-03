@@ -31,7 +31,7 @@ lbda_phys = 33           # Thermal conductivity (W/m K)
 mu_phys = 1.81e-3        # Dynamic viscosity (Ns/m^2)
 nu_phys = mu_phys / rho_phys      # Kinematic viscosity (m^2/s)
 beta_phys = 1.2e-4       # Thermal expansion (1/K)
-Lat_phys = 8.016e4       # Latent heat (J/kg)
+Lat_phys = 8.016e5       # Latent heat (J/kg)
 cp_phys = 381           # Specific heat (J/(kgK))
 alpha_phys = lbda_phys / (rho_phys * cp_phys)     # Thermal diffusivity (m^2/s)
 Tm_phys = 302.8          # Melting point (K)
@@ -388,7 +388,8 @@ def solve(h, capp, fL, B):
 
         if t % 2500 == 0:
             print(t)
-            print(np.max(vel[:, :, 1]))
+            # print(np.max(vel[:, :, 1]))
+            print(np.max(fL))
 
             if t == 0:
                 begin = time.time()
@@ -505,7 +506,7 @@ def solve(h, capp, fL, B):
         #
         #     plt.close('all')
 
-    return vel
+    return vel, fL
 
 
 start = time.time()
@@ -515,7 +516,7 @@ X_th = []
 X_sim = []
 t_phys = []
 
-u = solve(h, capp, fL, B)
+u, fL = solve(h, capp, fL, B)
 
 #####
 # Make arrays from lists
@@ -528,7 +529,7 @@ plt.plot(X_sim, t_phys)
 plt.xlabel('$x$ (m)')
 plt.ylabel('$t$ (s)')
 plt.title(f'Gallium \n Position of melting front, left wall at $T={TH_phys}K$, $t={Time}s$')
-plt.savefig(path_name + f"x_pos_t={Time}_N{Nx}_test1.png")
+plt.savefig(path_name + f"x_pos_t={Time}_N{Nx}_test2.png")
 
 # Liquid fraction
 plt.figure()
@@ -537,7 +538,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'Gallium \n $f_l$, left wall at $T={TH_phys}K$, $t={Time}s$')
 plt.colorbar()
-plt.savefig(path_name + f"heatmap_fl_t={Time}_N{Nx}_test1.png")
+plt.savefig(path_name + f"heatmap_fl_t={Time}_N{Nx}_test2.png")
 
 stop = time.time()
 print(stop-start)

@@ -220,7 +220,6 @@ def temperature(T_iter, h_old, c_app_iter, f_l_old, ux, uy, rho, T_dim_C, T_dim_
         return T_new
 
     f_l_iter = -np.ones(f_l_old.shape)  # Initialize
-
     h_iter = h_old.copy()
     f_l = f_l_old.copy()
 
@@ -335,7 +334,7 @@ plt.plot(X_sim, t_phys)
 plt.xlabel('$x$ (m)')
 plt.ylabel('$t$ (s)')
 plt.title(f'Gallium \n Position of melting front, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test3.png")
+plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/x_pos_t={np.round(t/Nt*Time, decimals=1)}_N{Nx}_test1.png")
 
 # Liquid fraction
 plt.figure()
@@ -344,7 +343,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
 plt.colorbar()
-plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test3.png")
+plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=1)}_N{Nx}_test1.png")
 
 stop = time.time()
 print(stop-start)

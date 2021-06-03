@@ -22,7 +22,7 @@ Nresponse = 25000
 # g_vec_phys = np.array([0, -g_phys])
 
 # Physical parameters gallium
-Time = 1140         # (s)
+Time = 1000         # (s)
 L = 0.01             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g_phys = 9.81            # Gravitational acceleration (m/s^2)
@@ -72,7 +72,7 @@ Ste = cp_phys * DT / Lat_phys
 
 # Simulation parameters
 l_relax = 0.1
-tau = 0.55
+tau = 0.53
 tau_inv = 1/tau
 Nx = 40
 Ny = 3 #np.int(0.714*Nx)
@@ -104,17 +104,18 @@ h = cp_phys / Ccp * np.zeros(dim)
 Lat = Lat_phys / Ch
 
 # Mushy zone parameters
-cs = cp_phys / Ccp
-cl = cp_phys / Ccp
+cp_s = cp_phys / Ccp
+cp_l = cp_phys / Ccp
 Ts = ((Tm_phys - epsilon) - T0_phys) * beta_phys
 Tl = ((Tm_phys + epsilon) - T0_phys) * beta_phys
-hs = cs * Ts
-hl = hs + Lat + (cs + cl) / 2 * (Tl - Ts)
+
+hs = cp_s * Ts
+hl = hs + Lat + (cp_s + cp_l) / 2 * (Tl - Ts)
 
 dT = Tl - Ts                # Parts of formulas to speed up code
 dTdh = dT / (hl - hs)
-cs_LatdT = cs + (Lat / dT)
-dcdT = (cl - cs) / dT
+cp_s_LatdT = cp_s + (Lat / dT)
+dcdT = (cp_l - cp_s) / dT
 
 g_vec = g_vec_phys / Cg
 
@@ -244,7 +245,7 @@ def forcing(vel, g, T):
 
 
 @njit
-def temperature(T_iter, h_old, capp_iter, fL_old, ux, uy, rho, T_dim_C, T_dim_H, t):
+def temperature(T_iter, h_old, capp_iter, fL_old, ux, uy, T_dim_C, T_dim_H, t):
     T_new = np.zeros((Nx+2, Ny+2))
 
     def energy_eq(i, j, T, ux, uy, c_app, h, h_old):
@@ -282,28 +283,28 @@ def temperature(T_iter, h_old, capp_iter, fL_old, ux, uy, rho, T_dim_C, T_dim_H,
                 im = i - 1
                 jm = j - 1
                 if h_new[im, jm] < hs:
-                    T_new[i, j] = h_new[im, jm] / cs
+                    T_new[i, j] = h_new[im, jm] / cp_s
                 elif h_new[im, jm] > hl:
-                    T_new[i, j] = Tl + (h_new[im, jm] - hl) / cl
+                    T_new[i, j] = Tl + (h_new[im, jm] - hl) / cp_l
                 else:
                     T_new[i, j] = Ts + (h_new[im, jm] - hs) * dTdh
 
                 if T_new[i, j] < Ts:
-                    capp[im, jm] = cs
+                    capp[im, jm] = cp_s
                     fL[im, jm] = 0
                 elif T_new[i, j] > Tl:
-                    capp[im, jm] = cl
+                    capp[im, jm] = cp_l
                     fL[im, jm] = 1
                 else:
-                    capp[im, jm] = cs_LatdT + (T_new[i, j] - Ts) * dcdT
+                    capp[im, jm] = cp_s_LatdT + (T_new[i, j] - Ts) * dcdT
                     fL[im, jm] = (T_new[i, j] - Ts) / dT
 
         # Ghost nodes
         T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
         T_new[1:-1, -1] = 21/23 * T_new[1:-1, -2] + 3/23 * T_new[1:-1, -3] - 1/23 * T_new[1:-1, -4]     # Neumann extrapolation on upper boundary
         T_new[0, :] = 16/5 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
-        # T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
-        T_new[-1, :] = 16/5 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
+        T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
+        # T_new[-1, :] = 16/5 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
         # easy_view("T2", T_new/beta_phys + T0_phys)
         # easy_view("capp", capp * Ccp)
@@ -323,7 +324,7 @@ def temperature(T_iter, h_old, capp_iter, fL_old, ux, uy, rho, T_dim_C, T_dim_H,
             print("No convergence in T after", n_iter, "iterations.")
             print("Timestep", t)
 
-    return T_new
+    return T_new, h_new, capp, fL
 
 
 @njit
@@ -365,7 +366,7 @@ def solve(h, capp, fL, B):
 
     for t in range(Nt):
         rho, vel = moment_update(f_str, F, B)
-        T = temperature(T, h, capp, fL, 0*vel[:, :, 0], 0*vel[:, :, 1], rho, TC, TH, t)
+        T, h, capp, fL = temperature(T, h, capp, fL, 0*vel[:, :, 0], 0*vel[:, :, 1], TC, TH, t)
         Si, F = forcing(vel, g_vec, T)
         f_col = collision(rho, vel, f_str, Si)
         f_str = streaming(f_col)

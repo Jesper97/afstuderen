@@ -15,7 +15,7 @@ suffix = "Ra10^5_MRT_Guo_Fuentes.png"
 Nresponse = 125000
 
 # Domain parameters
-Time = 100
+Time = 50
 L = 0.1
 H = L
 g_phys = 9.81
@@ -144,8 +144,7 @@ def initialize(g):
 
 
 @njit
-def streaming(rho, f_old):
-    f_new = np.empty((Nx, Ny, 9))
+def streaming(f_new, f_old):
     f = str.fluid(Nx, Ny, e, f_new, f_old)
     f = str.left_right_wall(Nx, Ny, f, f_old)
     f = str.top_bottom_wall(Nx, Ny, f, f_old)
@@ -263,7 +262,7 @@ def solve():
         T = temperature(T, cp, vel[:, :, 0], vel[:, :, 1], rho, TC, TH, t)
         Si, F = forcing(vel, g_vec, T)
         f_col = collision(rho, vel, f_str, Si)
-        f_str = streaming(rho, f_col)
+        f_str = streaming(f_empty, f_col)
 
         if t % 2500 == 0:
             print(t)
@@ -310,83 +309,83 @@ def solve():
     u = np.linspace(0, 1, 100)
     g = np.meshgrid(u, u)
     str_pts = list(zip(*(x.flat for x in g)))
-    plt.streamplot(x, y, ux_plot, uy_plot,
+    plt.streamplot(x, y, ux_plot, np.flip(uy_plot, axis=0),
                    linewidth    = 1.5,
                    cmap         = 'RdBu_r',
                    arrowstyle   = '-',
                    start_points = str_pts,
-                   density      = 3)
+                   density      = 1)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
     plt.savefig(path_name + f"streamlines_u_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
     plt.close()
 
-    # Contour plots
-    X, Y = np.meshgrid(x, y)
-    plt.figure()
-    CS = plt.contour(X, Y, np.flip(uy_plot, axis=1))
-    plt.clabel(CS, inline=True)
-    plt.xlabel('$x$ (# lattice nodes)')
-    plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Air \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    plt.savefig(path_name + f"contour_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-
-    plt.figure()
-    plt.clf()
-    CS = plt.contour(X, Y, ux_plot)
-    plt.clabel(CS, inline=True)
-    plt.xlabel('$x$ (# lattice nodes)')
-    plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Air \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    plt.savefig(path_name + f"contour_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-
-    # Velocities
-    plt.figure()
-    plt.clf()
-    plt.imshow(uy_plot, cmap=cm.Blues)
-    plt.xlabel('$x$ (# lattice nodes)')
-    plt.ylabel('$y$ (# lattice nodes) ')
-    plt.title(f'Air \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    plt.colorbar()
-    plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-
-    plt.figure()
-    plt.clf()
-    plt.imshow(ux_plot, cmap=cm.Blues, origin='lower')
-    plt.xlabel('$x$ (# lattice nodes)')
-    plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Air \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    plt.colorbar()
-    plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-
-    ## Temperature heatmap
-    cmap = cm.get_cmap('PiYG', 11)
-    plt.figure()
-    plt.clf()
-    plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cmap)
-    plt.xlabel('$x$ (# lattice nodes)')
-    plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Air \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    plt.colorbar()
-    plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-
+    # # Contour plots
+    # X, Y = np.meshgrid(x, y)
     # plt.figure()
-    # plt.clf()
-    # plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
+    # CS = plt.contour(X, Y, np.flip(uy_plot, axis=1))
+    # plt.clabel(CS, inline=True)
     # plt.xlabel('$x$ (# lattice nodes)')
     # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Air \n $\\rho$, left wall at $T={TH_phys}K$')
+    # plt.title(f'Air \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.savefig(path_name + f"contour_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    #
+    # plt.figure()
+    # plt.clf()
+    # CS = plt.contour(X, Y, ux_plot)
+    # plt.clabel(CS, inline=True)
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes)')
+    # plt.title(f'Air \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.savefig(path_name + f"contour_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    #
+    # # Velocities
+    # plt.figure()
+    # plt.clf()
+    # plt.imshow(uy_plot, cmap=cm.Blues)
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes) ')
+    # plt.title(f'Air \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     # plt.colorbar()
-    # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-
-    # Vector plot
-    plt.figure()
-    plt.quiver(ux_plot, np.flip(uy_plot, axis=1))
-    plt.xlabel('$x$ (# lattice nodes)')
-    plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Air \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.legend('Velocity vector')
-    plt.savefig(path_name + f"arrowplot_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    # plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    #
+    # plt.figure()
+    # plt.clf()
+    # plt.imshow(ux_plot, cmap=cm.Blues, origin='lower')
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes)')
+    # plt.title(f'Air \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.colorbar()
+    # plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    #
+    # ## Temperature heatmap
+    # cmap = cm.get_cmap('PiYG', 11)
+    # plt.figure()
+    # plt.clf()
+    # plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cmap)
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes)')
+    # plt.title(f'Air \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.colorbar()
+    # plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    #
+    # # plt.figure()
+    # # plt.clf()
+    # # plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
+    # # plt.xlabel('$x$ (# lattice nodes)')
+    # # plt.ylabel('$y$ (# lattice nodes)')
+    # # plt.title(f'Air \n $\\rho$, left wall at $T={TH_phys}K$')
+    # # plt.colorbar()
+    # # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    #
+    # # Vector plot
+    # plt.figure()
+    # plt.quiver(ux_plot, np.flip(uy_plot, axis=1))
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes)')
+    # plt.title(f'Air \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # # plt.legend('Velocity vector')
+    # plt.savefig(path_name + f"arrowplot_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
     plt.close('all')
 
@@ -415,6 +414,8 @@ def solve():
 
 
 start = time.time()
+
+f_empty = np.empty((Nx, Ny, q))
 
 u = solve()
 

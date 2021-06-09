@@ -186,10 +186,9 @@ def force_source(ux, uy, F):
 
     return Si
 
-@jit
+@njit
 def temperature(T_old, f_l_old, ux_sim, uy_sim, t, T_dim_C, T_dim_H):
     T_new = np.zeros((Nx+2, Ny+2))
-    n_iter_arr = np.zeros((Nx, Ny))
     l_relax = 1.0
 
     Ts = Tm - epsilon
@@ -220,12 +219,11 @@ def temperature(T_old, f_l_old, ux_sim, uy_sim, t, T_dim_C, T_dim_H):
                     f_l_new[i-1, j-1] = f_l_iter[i-1, j-1] + l_relax * c_p / Lat * (T_new[i, j] - T_prime)
                     f_l_new[i-1, j-1] = min(max(f_l_new[i-1, j-1], 0), 1)
 
-                    if (np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6) and (n_iter >= 3):
-                        n_iter_arr[i-1, j-1] = n_iter
+                    if (np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6):  # and (n_iter >= 3):
                         break
-                    # elif (n_iter > 100) and (l_relax == 1):
-                    #     l_relax = 0.1
-                    #     break
+                    elif (n_iter > 100) and (l_relax == 1):
+                        l_relax = 0.1
+                        break
                     else:
                         f_l_iter[i-1, j-1] = f_l_new[i-1, j-1]
 

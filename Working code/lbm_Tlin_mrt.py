@@ -44,7 +44,7 @@ lbda_phys = 0.157 / 1.06421589
 mu_phys = 3.26e-3
 nu_phys = 5.005e-6 / 1.157627
 alpha_phys = lbda_phys / (cp_phys * rho_phys)   # 8.647e-8
-beta_phys = 9.1e-4 / 23.8786375
+beta_phys = 9.1e-4 / 2.38786371
 Lat_phys = 241e3 / 1.09545463
 Tm_phys = 301.13
 
@@ -69,12 +69,14 @@ cs = 1/np.sqrt(3)
 Pr = nu_phys / alpha_phys
 Ra = g_phys * beta_phys * (TH_phys - TC_phys) * H**3 / (nu_phys * alpha_phys)
 Ste = cp_phys * DT / Lat_phys
+FoSte_t = Ste * alpha_phys / L**2
+print(FoSte_t)
 
 # Simulation parameters
 l_relax = 1#0.1
 tau = 0.55
 tau_inv = 1/tau
-Nx = 80
+Nx = 79
 Ny = Nx #np.int(0.714*Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -147,10 +149,10 @@ if alpha > 1/6:
     print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra107/"
-suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra107/"
-csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra108/"
+suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N{Nx}x{Ny}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra108/"
+csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N{Nx}x{Ny}"
 
 
 def easy_view(nr, arr):
@@ -203,7 +205,7 @@ def f_eq(rho, vel):
 @njit
 def collision_speedup(Omegaf, fL, f, Si):
     Bi = zeros((Nx, Ny, 9))
-    B = (1 - fL) * (tau - 1/2) / (fL + tau - 1/2)
+    B = np.round((1 - fL) * (tau - 1/2) / (fL + tau - 1/2))
     for k in range(9):
         Bi[:, :, k] = B
 
@@ -212,7 +214,6 @@ def collision_speedup(Omegaf, fL, f, Si):
 
 def collision(r, u, f_old, Si, fL):
     Omegaf = einsum('ij,klj->kli', MSM, f_old - f_eq(r, u) - Si/2)
-    # return f_old - Omegaf + Si
     return collision_speedup(Omegaf, fL, f_old, Si)
 
 
@@ -306,12 +307,10 @@ def temperature(T_iter, h_old, capp_iter, fL_old, ux, uy, T_dim_C, T_dim_H, t):
             # T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
             T_new[-1, :] = 16/5 * T_dim_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-            if any(npabs(fL - fL_iter)) < 1e-5:
-                # print(n_iter)
+            if any(npabs(fL - fL_iter)) < 1e-6:
                 break
             elif (n_iter > 10) and l_relax == 1:
                 l_relax = 0.1
-                # print('yes')
                 break
             else:
                 T_iter = T_new.copy()
@@ -324,8 +323,7 @@ def temperature(T_iter, h_old, capp_iter, fL_old, ux, uy, T_dim_C, T_dim_H, t):
                 print("No convergence in T after", n_iter, "iterations.")
                 print("Timestep", t)
 
-        if any(npabs(fL - fL_iter)) < 1e-5:
-            # print(n_iter)
+        if any(npabs(fL - fL_iter)) < 1e-6:
             break
         else:
             continue
@@ -334,13 +332,13 @@ def temperature(T_iter, h_old, capp_iter, fL_old, ux, uy, T_dim_C, T_dim_H, t):
 
 
 @njit
-def moment_update(f_new, F):
+def moment_update(f_new, F, B):
     rho = empty((Nx, Ny))
     vel = empty((Nx, Ny, 2))
     for j in range(Ny):
         for i in range(Nx):
             rho[i, j] = npsum(f_new[i, j, :])
-            if B[i, j] != 0:
+            if B[i, j] >= 0.5: #!= 0:
                 vel[i, j, 0] = 0
                 vel[i, j, 1] = 0
             else:
@@ -357,7 +355,7 @@ def moment_plots(f_new, B):
     for j in range(Ny):
         for i in range(Nx):
             rho[i, j] = npsum(f_new[i, j, :])
-            if B[i, j] != 0:
+            if B[i, j] >= 0.5:   #!= 0:
                 vel[i, j, 0] = 0
                 vel[i, j, 1] = 0
             else:
@@ -367,7 +365,7 @@ def moment_plots(f_new, B):
     return rho, vel
 
 
-def outputs(f_str, T, fL, B, t):
+def outputs(f_str, T, fL, B, Nu, FoSte, t):
     rho, vel = moment_plots(f_str, B)
     T_phys = T / beta_phys + T0_phys
     TH_phys = TH / beta_phys + T0_phys
@@ -475,18 +473,29 @@ def outputs(f_str, T, fL, B, t):
     plt.close('all')
 
     # Save arrays to CSV-files
-    np.savetxt("rho_"+csv_path+csv_file+".csv",    rho,                    delimiter=",")
-    np.savetxt("fL_"+csv_path+csv_file+".csv",     fL.T,                   delimiter=",")
-    np.savetxt("ux_"+csv_path+csv_file+".csv",     ux_plot,                delimiter=",")
-    np.savetxt("uy_"+csv_path+csv_file+".csv",     uy_plot,                delimiter=",")
-    np.savetxt("T_"+csv_path+csv_file+".csv",      T_phys[1:-1, 1:-1].T,   delimiter=",")
+    np.savetxt(csv_path+"rho_"+csv_file+".csv",     rho,                    delimiter=",")
+    np.savetxt(csv_path+"fL_"+csv_file+".csv",      fL.T,                   delimiter=",")
+    np.savetxt(csv_path+"ux_"+csv_file+".csv",      ux_plot,                delimiter=",")
+    np.savetxt(csv_path+"uy_"+csv_file+".csv",      uy_plot,                delimiter=",")
+    np.savetxt(csv_path+"T_"+csv_file+".csv",       T_phys[1:-1, 1:-1].T,   delimiter=",")
+    np.savetxt(csv_path+"Nu"+csv_file+".csv",       Nu,                     delimiter=",")
+    np.savetxt(csv_path+"FoSte"+csv_file+".csv",    FoSte,                  delimiter=",")
+
+
+@njit(fastmath=True)
+def nusselt(Nu, FoSte, T, t):
+    Nu_new = -(1 / (beta_phys * DT)) * npsum((-23 * T[0, 1:-1] + 21 * T[1, 1:-1] + 3 * T[2, 1:-1] - T[3, 1:-1]) / 24)
+    FoSte_new = FoSte_t * (t / Nt * Time)
+    return np.append(Nu, Nu_new), np.append(FoSte, FoSte_new)
 
 
 def solve(h, capp, fL, B):
     vel, rho, f_str, Si, F, T = initialize(g_vec)
+    Nu = np.array([0])
+    FoSte = np.array([0])
 
     for t in range(Nt):
-        rho, vel = moment_update(f_str, F)
+        rho, vel = moment_update(f_str, F, B)
         T, h, capp, fL = temperature(T, h, capp, fL, vel[:, :, 0], vel[:, :, 1], TC, TH, t)
         Si, F = forcing(vel, g_vec, T)
         B, f_col = collision(rho, vel, f_str, Si, fL)
@@ -494,9 +503,6 @@ def solve(h, capp, fL, B):
 
         if t % 2500 == 0:
             print(t)
-            print(np.max(vel[:, :, 1]))
-            # print(np.max(fL))
-
             if t == 0:
                 begin = time.time()
             if t == 10000:
@@ -505,13 +511,30 @@ def solve(h, capp, fL, B):
                 mins = np.round(runtime/60, 1)
                 print("Estimated runtime:", mins, "minutes.")
 
+        if (t > 5000) and (t % 1000) and (t != 0):
+                Nu, FoSte = nusselt(Nu, FoSte, T, t)
+
         if (t % Nresponse == 0) and (t != 0):
-            outputs(f_str, T, fL, B, t)
+            outputs(f_str, T, fL, B, Nu, FoSte, t)
+
+    return Nu, FoSte
 
 
 start = time.time()
 
-solve(h, capp, fL, B)
+Nu, FoSte = solve(h, capp, fL, B)
 
 stop = time.time()
 print(stop-start)
+
+FoSte = np.array(FoSte[1:])
+Nu_corr = (2 * FoSte)**(-1/2) + (0.35 * Ra**(1/4) - (2 * FoSte)**(-1/2)) * (1 + (0.0175 * Ra**(3/4) * FoSte**(3/2))**(-2))**(-1/2)
+Nu = np.array(Nu[1:])
+plt.figure()
+plt.plot(FoSte, Nu)
+plt.plot(FoSte, Nu_corr)
+plt.legend([r"$\tau=0.55$", "Jany & Bejan Correlation"])
+plt.xlabel('FoSte')
+plt.ylabel('Nu')
+# plt.title(f'Gallium \n Position of melting front, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+plt.savefig(path_name + f"Nusselt_correlation_vs_simulation" + suffix)

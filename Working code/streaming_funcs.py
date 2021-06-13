@@ -1,20 +1,20 @@
-from numba import njit
+from numba import njit, prange
 
 
-@njit
+@njit(parallel=True)
 def fluid(Nx, Ny, e, f_new, f_old):
-    for j in range(1, Ny-1):
-        for i in range(1, Nx-1):
-            for k in range(9):
+    for j in prange(1, Ny-1):
+        for i in prange(1, Nx-1):
+            for k in prange(9):
                 ip = i - e[k, 0]
                 jp = j - e[k, 1]
                 f_new[i, j, k] = f_old[ip, jp, k]
     return f_new
 
 
-@njit
+@njit(parallel=True)
 def left_right_wall(Nx, Ny, f_new, f_old):
-    for j in range(1, Ny - 1):
+    for j in prange(1, Ny-1):
         # Left wall
         i = 0
         f_new[i, j, 0] = f_old[i, j, 0]
@@ -42,9 +42,9 @@ def left_right_wall(Nx, Ny, f_new, f_old):
     return f_new
 
 
-@njit
+@njit(parallel=True)
 def top_bottom_wall(Nx, Ny, f_new, f_old):
-    for i in range(1, Nx-1):
+    for i in prange(1, Nx-1):
         # Bottom wall
         j = 0
         f_new[i, j, 0] = f_old[i, j, 0]

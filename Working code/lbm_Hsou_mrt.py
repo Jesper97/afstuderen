@@ -472,6 +472,7 @@ def solve(h, capp, fL, B):
     for t in range(Nt):
         rho, vel = moment_update(f_str, F, B)
         T, fL = temperature(T, fL, 0*vel[:, :, 0], 0*vel[:, :, 1], t, TC, TH)
+        easy_view("T", T)
         Si, F = forcing(vel, g_vec, T)
         B, f_col = collision(rho, vel, f_str, Si, fL)
         easy_view("f_col", f_col[:, :, 1])

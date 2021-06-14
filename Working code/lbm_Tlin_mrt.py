@@ -50,7 +50,7 @@ Tm_phys = 301.13
 
 # Temperature
 DT = 10
-T0_phys = 301.0
+T0_phys = 301.05
 TH_phys = T0_phys + DT
 TC_phys = T0_phys
 epsilon = 0.005 * DT
@@ -75,7 +75,7 @@ FoSte_t = Ste * alpha_phys / L**2
 l_relax = 1#0.1
 tau = 0.55
 tau_inv = 1/tau
-Nx = 180
+Nx = 196
 Ny = Nx #np.int(0.714*Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -93,7 +93,7 @@ Ccp = Ch * beta_phys
 Clbda = Crho * dx**4 / dt**3 * beta_phys
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/8 - 10)
+Nresponse = np.int(Nt/10 - 5)
 
 # Initial conditions
 dim = (Nx, Ny)
@@ -151,7 +151,7 @@ if alpha > 1/6:
 path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra108/"
 suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}.png"
 csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra108/"
-csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}.png"
+csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}"
 
 print(suffix)
 
@@ -479,18 +479,18 @@ def outputs(f_str, T, fL, B, Nu, FoSte, t):
     plt.close('all')
 
     # Save arrays to CSV-files
-    np.savetxt(csv_path+"rho_"+csv_file+".csv",     rho,                    delimiter=",")
-    np.savetxt(csv_path+"fL_"+csv_file+".csv",      fL.T,                   delimiter=",")
-    np.savetxt(csv_path+"ux_"+csv_file+".csv",      ux_plot,                delimiter=",")
-    np.savetxt(csv_path+"uy_"+csv_file+".csv",      uy_plot,                delimiter=",")
-    np.savetxt(csv_path+"T_"+csv_file+".csv",       T_phys[1:-1, 1:-1].T,   delimiter=",")
-    np.savetxt(csv_path+"Nu"+csv_file+".csv",       Nu,                     delimiter=",")
-    np.savetxt(csv_path+"FoSte"+csv_file+".csv",    FoSte,                  delimiter=",")
+    np.savetxt(csv_path+"rho_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",     rho,                    delimiter=",")
+    np.savetxt(csv_path+"fL_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      fL.T,                   delimiter=",")
+    np.savetxt(csv_path+"ux_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      ux_plot,                delimiter=",")
+    np.savetxt(csv_path+"uy_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      uy_plot,                delimiter=",")
+    np.savetxt(csv_path+"T_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",       T_phys[1:-1, 1:-1].T,   delimiter=",")
+    np.savetxt(csv_path+"Nu"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",       Nu,                     delimiter=",")
+    np.savetxt(csv_path+"FoSte"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",    FoSte,                  delimiter=",")
 
 
 @njit(fastmath=True)
 def nusselt(Nu, FoSte, T, t):
-    Nu_new = np.float32(-(1 / (beta_phys * DT)) * npsum((T[1, 1:-1] - T[0, 1:-1]) / 2))
+    Nu_new = np.float32(-(1 / (beta_phys * DT)) * npsum(T[1, 1:-1] - T[0, 1:-1]))
     # Nu_new = -(1 / (beta_phys * DT)) * npsum((-23 * T[0, 1:-1] + 21 * T[1, 1:-1] + 3 * T[2, 1:-1] - T[3, 1:-1]) / 24)
     FoSte_new = np.float32(FoSte_t * (t / Nt * Time))
     return np.append(Nu, Nu_new), np.append(FoSte, FoSte_new)
@@ -521,7 +521,7 @@ def solve(h, capp, fL, B):
                 mins = np.round(runtime/60, 1)
                 print("Estimated runtime:", mins, "minutes.")
 
-        if (t > 5000) and (t % (Nt / 1000) == 0):
+        if (t > 5000) and (t % np.int(Nt / 1000) == 0):
             Nu, FoSte = nusselt(Nu, FoSte, T, t)
 
         if (t % Nresponse == 0) and (t != 0):
@@ -535,8 +535,8 @@ start = time.time()
 Nu, FoSte = solve(h, capp, fL, B)
 
 stop = time.time()
-run_time = stop - start
-print(run_time)
+run_time = np.array([stop - start])
+print(run_time[0])
 
 np.savetxt(csv_path+"run_time"+csv_file+".csv", run_time, delimiter=",")
 
@@ -550,4 +550,4 @@ plt.legend([r"$\tau=0.55$", "Jany & Bejan Correlation"])
 plt.xlabel('FoSte')
 plt.ylabel('Nu')
 plt.ylim(0, 80)
-plt.savefig(path_name + f"Nusselt_correlation_vs_simulation" + suffix)
+plt.savefig(path_name + f"Nusselt_correlation_vs_simulation_" + suffix)

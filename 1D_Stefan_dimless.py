@@ -69,7 +69,7 @@ Ma = 0.1                                            # Mach number
 Lambda = 1/4        # Magic parameter
 tau_plus = 0.53     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Nx = 40             # Nodes in y-direction
+Nx = 40              # Nodes in y-direction
 Ny = 3 #np.int(0.714*Nx)
 
 dx_sim = 1          # simulation length
@@ -272,6 +272,10 @@ def temperature(T_iter, h_old, c_app_iter, f_l_old, ux, uy, rho, T_dim_C, T_dim_
             c_app_iter = c_app.copy()
             f_l_iter = f_l.copy()
 
+        if n_iter == 10000:
+                print("No convergence in T after", n_iter, "iterations.")
+                print("Timestep", t)
+
         n_iter += 1
 
     if t % 1000 == 0:
@@ -298,7 +302,10 @@ for t in range(Nt):
     ### Temperature
     T_dim, h, c_app, f_l = temperature(T_dim, h, c_app, f_l, ux, uy, rho_sim, T_dim_C, T_dim_H, t)                   # Calculate temperature and liquid fraction
 
-    ### Plots
+    # ### Plots
+    # if t % 1000 == 0:
+    #     print(t)
+
     if (t % 1000 == 0):
         temp = t * Time / Nt
         t_phys.append(temp)
@@ -333,17 +340,18 @@ plt.plot(X_th, t_phys)
 plt.plot(X_sim, t_phys)
 plt.xlabel('$x$ (m)')
 plt.ylabel('$t$ (s)')
-plt.title(f'Gallium \n Position of melting front, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/x_pos_t={np.round(t/Nt*Time, decimals=1)}_N{Nx}_test1.png")
+plt.legend(['Analytical', 'Simulation'])
+plt.title(f'Gallium \n Position of melting front, wall at $T={np.round(T_H)}K$')
+plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test2.png")
 
 # Liquid fraction
 plt.figure()
 plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
 plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+plt.title(f'Gallium \n $f_l$, wall at $T={np.round(T_H)}K$')
 plt.colorbar()
-plt.savefig(f"Figures/hsource_trt-fsm_sq_cav/{folder_nr}/heatmap_fl_t={np.round(t/Nt*Time, decimals=1)}_N{Nx}_test1.png")
+plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/Smeltfront/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test2.png")
 
 stop = time.time()
 print(stop-start)

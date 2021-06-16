@@ -56,7 +56,6 @@ T_H = 305           # Hot wall temperature (K)
 T_C = 301.3         # Cold wall temperature (K)
 epsilon = 0.01 * (T_H - Tm)  # 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * H)           # Maximal velocity
-print(umax)
 
 # Dimensionless numbers
 Re = umax * H / nu                                  # Reynolds number
@@ -67,9 +66,9 @@ Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.55     # Even relaxation time
+tau_plus = 0.505     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Nx = 160             # Nodes in y-direction
+Nx = 80             # Nodes in y-direction
 Ny = 3 #np.int(0.714*Nx)
 
 dx_sim = 1          # simulation length
@@ -80,12 +79,8 @@ print('nu_sim', nu_sim)
 
 # Determine dependent parameters
 umax_sim = Re * nu_sim / Ny                             # Maximal simulation density
-print('umax_sim', umax_sim)
 tau_minus = dt_sim * (Lambda / (tau_plus / dt_sim - 1/2) + 1/2)
 alpha_sim = nu_sim / Pr
-
-# if alpha_sim > 1/6:
-#     print(f"alpha too large ({alpha_sim}), unstable temperature")
 
 # Calculate conversion parameters
 dx = L / Nx                                             # Distance
@@ -96,6 +91,9 @@ Cg = dx / dt**2                                         # Acceleration
 Crho = rho0 / rho0_sim                                  # Density
 CF = Crho * Cg                                          # Force
 Ch = dx**2 / dt**2                                      # Specific enthalpy
+
+if alpha * dt / dx**2 > 1/6:
+    print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
 
 # D2Q9 lattice constants
 c_i = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]], dtype=np.int)
@@ -187,10 +185,10 @@ def force_source(ux, uy, F):
     return Si
 
 @njit
-def temperature(T_old, f_l_old, t, T_dim_C, T_dim_H):
+def temperature(T_old, f_l_old, ux_LB, uy_LB, t, T_dim_C, T_dim_H):
     T_new = np.zeros((Nx+2, Ny+2))
     f_l_new = np.zeros((Nx, Ny))
-    l_relax = 0.1
+    l_relax = 1
 
     Ts = Tm - epsilon
     Tl = Tm + epsilon
@@ -198,29 +196,28 @@ def temperature(T_old, f_l_old, t, T_dim_C, T_dim_H):
     h_l = h_s + Lat + c_p * (Tl - Ts)
 
     T_H = T_dim_H / beta + T0
-    # print(T_H)
     T_C = T_dim_C / beta + T0
+
+    ux = ux_LB / Cu
+    uy = uy_LB / Cu
 
     T_old = T_old / beta + T0
     f_l_iter = f_l_old.copy()
 
-    # easy_view("T_old", T_old)
     for j in range(1, Ny+1):
         for i in range(1, Nx+1):
             while True:
                 n_iter = 1
 
                 while True:
-                    # T_new[i, j] = (1 - 6 * alpha) * T_old[i, j] + (2 * alpha - ux[i-1, j-1]) * T_old[i+1, j] \
-                    #       + (2 * alpha + ux[i-1, j-1]) * T_old[i-1, j] + (2 * alpha - uy[i-1, j-1]) * T_old[i, j+1] \
-                    #       + (2 * alpha + uy[i-1, j-1]) * T_old[i, j-1] + (ux[i-1, j-1] / 4 + uy[i-1, j-1] / 4 - alpha / 2) * T_old[i+1, j+1] \
-                    #       + (-ux[i-1, j-1] / 4 + uy[i-1, j-1] / 4 - alpha / 2) * T_old[i-1, j+1] + (ux[i-1, j-1] / 4 - uy[i-1, j-1] / 4 - alpha / 2) * T_old[i+1, j-1] \
-                    #       + (-ux[i-1, j-1] / 4 - uy[i-1, j-1] / 4 - alpha / 2) * T_old[i-1, j-1] - beta * Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
+                    # T_new[i, j] = T_old[i, j] + alpha * dt / dx**2 * (T_old[i+1, j] - 2 * T_old[i, j] + T_old[i-1, j]) - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
+                    # T_new[i, j] = T_old[i, j] + alpha * dt / dx**2 * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j])\
+                    #               - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
 
-                    T_new[i, j] = T_old[i, j] + alpha * dt / dx**2 * (T_old[i+1, j] - 2 * T_old[i, j] + T_old[i-1, j]) - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
-
-                    # T_prime = Ts + (Tl - Ts) * f_l_iter[i-1, j-1]
-                    # f_l_new[i-1, j-1] = f_l_iter[i-1, j-1] + l_relax * c_p / Lat * (T_new[i, j] - T_prime)
+                    T_new[i, j] = T_old[i, j] - ux[i-1, j-1] * dt / dx * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
+                                  - uy[i-1, j-1] * dt / dx * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
+                                  + alpha * dt / dx**2 * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j]) \
+                                  - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
 
                     h = c_p * T_new[i, j] + f_l_iter[i-1, j-1] * Lat
 
@@ -231,7 +228,7 @@ def temperature(T_old, f_l_old, t, T_dim_C, T_dim_H):
                     else:
                         f_l_new[i-1, j-1] = (h - h_s) / (h_l - h_s)
 
-                    # f_l_new[i-1, j-1] = min(max(f_l_new[i-1, j-1], 0), 1)
+                    f_l_new[i-1, j-1] = min(max(f_l_new[i-1, j-1], 0), 1)
 
                     if (np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6) and (n_iter >= 3):
                         break
@@ -257,9 +254,6 @@ def temperature(T_old, f_l_old, t, T_dim_C, T_dim_H):
     T_new[0, :] = 16/5 * T_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
     # T_new[-1, :] = 16/5 * T_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-    # if (t > 13500) and (t % 100 == 0):
-    #     print(t)
-
     T_dim = beta * (T_new - T0)
 
     return T_dim, f_l_new
@@ -281,13 +275,13 @@ for t in range(Nt):
     uy = 0 * T_dim_phys   # Calculate y velocity (odd parts due to symmetry)
 
     ### Temperature
-    T_dim, f_l = temperature(T_dim, f_l, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
+    T_dim, f_l = temperature(T_dim, f_l, ux, uy, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
 
     ### Plots
     if t % 10000 == 0:
         print(t)
 
-    if (t % 1000 == 0):
+    if (t % 1000 == 0) and (t > 0):
         temp = t * Time / Nt
         t_phys.append(temp)
 
@@ -300,15 +294,16 @@ for t in range(Nt):
         idx = half_f_l.argmin()
         Xt_sim = (idx + 0.5) / Nx * L
         X_sim.append(Xt_sim)
-    #
-    # if t % 5000 == 0:
-    #     plt.figure()
-    #     plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-    #     plt.xlabel('$x$ (# lattice nodes)')
-    #     plt.ylabel('$y$ (# lattice nodes)')
-    #     plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    #     plt.colorbar()
-    #     plt.show()
+
+    if (t % 500000 == 0) and (t > 0):
+        plt.figure()
+        plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+        plt.imshow(T_dim.T/beta+T0, cmap=cm.autumn, origin='lower', aspect=1.0)
+        plt.xlabel('$x$ (# lattice nodes)')
+        plt.ylabel('$y$ (# lattice nodes)')
+        plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+        plt.colorbar()
+        plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd.png")
 
         # T = T_dim / beta + T0
 
@@ -321,19 +316,21 @@ plt.plot(X_th, t_phys)
 plt.plot(X_sim, t_phys)
 plt.xlabel('$x$ (m)')
 plt.ylabel('$t$ (s)')
-plt.title(f'Gallium \n Position of melting front, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/test/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test2.png")
+plt.legend(['Analytical', 'Simulation'])
+plt.title(f'Gallium \n Position of melting front, wall at $T={np.round(T_H)}K$')
+plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd.png")
 
 # Liquid fraction
 plt.figure()
 plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
 plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
-plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+plt.title(f'Gallium \n $f_l$, wall at $T={np.round(T_H)}K$')
 plt.colorbar()
-plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/test/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test2.png")
+plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd.png")
 
 easy_view("fL", f_l)
+easy_view("T", T_dim / beta + T0)
 
 stop = time.time()
 print(stop-start)

@@ -14,7 +14,7 @@ np.set_printoptions(threshold=sys.maxsize)
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
 
-# Domain parameters
+# # Domain parameters
 Time = 11565
 L = 0.1
 H = L
@@ -22,8 +22,8 @@ g_phys = 9.81
 g_vec_phys = np.array([0, -g_phys])
 
 # # Physical parameters gallium
-# Time = 1000         # (s)
-# L = 0.01             # Length of cavity (m)
+# Time = 1140         # (s)
+# L = 0.1             # Length of cavity (m)
 # H = 0.714*L      # Height of cavity (m)
 # g_phys = 9.81            # Gravitational acceleration (m/s^2)
 # rho_phys = 6.093e3      # Density (kg/m^3)
@@ -36,6 +36,15 @@ g_vec_phys = np.array([0, -g_phys])
 # alpha_phys = lbda_phys / (rho_phys * cp_phys)     # Thermal diffusivity (m^2/s)
 # Tm_phys = 302.8          # Melting point (K)
 # g_vec_phys = g_phys * np.array([0, -1])
+# print(alpha_phys)
+# print(nu_phys)
+
+# # Temperature gallium
+# DT = 10
+# T0_phys = 301.3
+# TH_phys = 311  #T0_phys + DT
+# TC_phys = 301.3  #T0_phys
+# epsilon = 0.005 * DT
 
 # Material parameters octadecane
 rho_phys = 775.5
@@ -48,7 +57,7 @@ beta_phys = 9.1e-4 / 2.38786375
 Lat_phys = 241e3 / 1.09545463
 Tm_phys = 301.13
 
-# Temperature
+# Temperature octadecane
 DT = 10
 T0_phys = 301.05
 TH_phys = T0_phys + DT
@@ -148,9 +157,9 @@ if alpha > 1/6:
     print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra108/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra108/N140/"
 suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra108/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra108/N140/"
 csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}"
 
 print(suffix)
@@ -541,6 +550,7 @@ print(run_time[0])
 np.savetxt(csv_path+"run_time"+csv_file+".csv", run_time, delimiter=",")
 
 FoSte = np.array(FoSte[1:])
+# Nu_corr = (2 * FoSte)**(-1/2) + (0.35 * Ra**(1/4) - (2 * FoSte)**(-1/2)) * (1 + (0.0175 * Ra**(3/4) * FoSte**(3/2))**(-2))**(-1/2)  # High Pr
 Nu_corr = (2 * FoSte)**(-1/2) + (0.35 * Ra**(1/4) - (2 * FoSte)**(-1/2)) * (1 + (0.0175 * Ra**(3/4) * FoSte**(3/2))**(-2))**(-1/2)
 Nu = np.array(Nu[1:])
 plt.figure()

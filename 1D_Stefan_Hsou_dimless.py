@@ -24,7 +24,7 @@ folder_nr = '1d_stefan'
 # rho0 = 1e3          # Density (kg/m^3)
 # beta = 210e-6       # Thermal expansion (1/K)
 # Lat = 334e3         # Latent heat (J/kg)
-# c_p = 4.2e3         # Specific heat (J/(kgK))
+# cp_phys = 4.2e3         # Specific heat (J/(kgK))
 # Tm = 273.15         # Melting point (K)
 #
 # # Domain parameters
@@ -44,24 +44,24 @@ lbda = 33           # Thermal conductivity (W/m K)
 mu = 1.81e-3        # Dynamic viscosity (Ns/m^2)
 nu = mu / rho0      # Kinematic viscosity (m^2/s)
 beta = 1.2e-4       # Thermal expansion (1/K)
-Lat = 8.016e5       # Latent heat (J/kg)
-c_p = 381           # Specific heat (J/(kgK))
-alpha = lbda / (rho0 * c_p)     # Thermal diffusivity (m^2/s)
-print("a", alpha)
-Tm = 302.8          # Melting point (K)
+Lat_phys = 8.016e5       # Latent heat (J/kg)
+cp_phys = 381           # Specific heat (J/(kgK))
+alpha_phys = lbda / (rho0 * cp_phys)     # Thermal diffusivity (m^2/s)
+print("a", alpha_phys)
+Tm_phys = 302.8          # Melting point (K)
 
 # Domain parameters
 T0 = 302.67          # Starting temperature (K)
 T_H = 305           # Hot wall temperature (K)
 T_C = 301.3         # Cold wall temperature (K)
-epsilon = 0.01 * (T_H - Tm)  # 0.05 * (T_H - T_C)  # Width mushy zone (K)
+epsilon = 0.01 * (T_H - Tm_phys) * beta  # 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * H)           # Maximal velocity
 
 # Dimensionless numbers
 Re = umax * H / nu                                  # Reynolds number
-Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha)    # Rayleigh number
+Ra = beta * (T_H - T0) * g * H**3 / (nu * alpha_phys)    # Rayleigh number
 print('Ra', Ra)
-Pr = nu / alpha                                     # Prandtl number
+Pr = nu / alpha_phys                                     # Prandtl number
 Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
@@ -80,7 +80,7 @@ print('nu_sim', nu_sim)
 # Determine dependent parameters
 umax_sim = Re * nu_sim / Ny                             # Maximal simulation density
 tau_minus = dt_sim * (Lambda / (tau_plus / dt_sim - 1/2) + 1/2)
-alpha_sim = nu_sim / Pr
+alpha = nu_sim / Pr
 
 # Calculate conversion parameters
 dx = L / Nx                                             # Distance
@@ -91,10 +91,11 @@ Cg = dx / dt**2                                         # Acceleration
 Crho = rho0 / rho0_sim                                  # Density
 CF = Crho * Cg                                          # Force
 Ch = dx**2 / dt**2                                      # Specific enthalpy
+Ccp = Ch * beta
 
-print("alpha * dt / dx**2", alpha * dt / dx**2)
-if alpha * dt / dx**2 > 1/6:
-    print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
+print("alpha * dt / dx**2 =", alpha_phys * dt / dx**2)
+if alpha_phys * dt / dx**2 > 1/6:
+    print(f"Warning alpha = {np.round(alpha_phys, 2)}. Can cause stability or convergence issues.")
 
 # D2Q9 lattice constants
 c_i = np.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]], dtype=np.int)
@@ -117,8 +118,10 @@ uy = np.zeros(dim)                 # Simulation velocity in y direction
 rho_sim = rho0_sim * np.ones(dim)  # Simulation density
 T_dim = np.zeros((Nx+2, Ny+2))     # Dimensionless simulation temperature
 f_l = np.zeros(dim)                # Liquid fraction
-h = (c_p * T0) * np.ones(dim)        # Enthalpy
-c_app = c_p * np.ones(dim)
+h = (cp_phys * T0) / Ch * np.ones(dim)        # Enthalpy
+cp = cp_phys / Ccp
+Lat = Lat_phys / Ch
+Tm = beta * (Tm_phys - T0)
 
 # Temperature BCS
 T_dim_H = np.ones(Ny+2) * beta * (T_H - T0)
@@ -186,23 +189,16 @@ def force_source(ux, uy, F):
     return Si
 
 @njit
-def temperature(T_old, f_l_old, ux_LB, uy_LB, t, T_dim_C, T_dim_H):
+def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
     T_new = np.zeros((Nx+2, Ny+2))
     f_l_new = np.zeros((Nx, Ny))
     l_relax = 1
 
     Ts = Tm - epsilon
     Tl = Tm + epsilon
-    h_s = c_p * Ts
-    h_l = h_s + Lat + c_p * (Tl - Ts)
+    h_s = cp * Ts
+    h_l = h_s + Lat + cp * (Tl - Ts)
 
-    T_H = T_dim_H / beta + T0
-    T_C = T_dim_C / beta + T0
-
-    ux = ux_LB / Cu
-    uy = uy_LB / Cu
-
-    T_old = T_old / beta + T0
     f_l_iter = f_l_old.copy()
 
     for j in range(1, Ny+1):
@@ -213,14 +209,14 @@ def temperature(T_old, f_l_old, ux_LB, uy_LB, t, T_dim_C, T_dim_H):
                 while True:
                     # T_new[i, j] = T_old[i, j] + alpha * dt / dx**2 * (T_old[i+1, j] - 2 * T_old[i, j] + T_old[i-1, j]) - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
                     # T_new[i, j] = T_old[i, j] + alpha * dt / dx**2 * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j])\
-                    #               - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
+                    #               - Lat / cp * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
 
-                    T_new[i, j] = T_old[i, j] - ux[i-1, j-1] * dt / dx * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
-                                  - uy[i-1, j-1] * dt / dx * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
-                                  + alpha * dt / dx**2 * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j]) \
-                                  - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
+                    T_new[i, j] = T_old[i, j] - ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
+                                  - uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
+                                  + alpha * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j]) \
+                                  - Lat / cp * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
 
-                    h = c_p * T_new[i, j] + f_l_iter[i-1, j-1] * Lat
+                    h = cp * T_new[i, j] + f_l_iter[i-1, j-1] * Lat
 
                     if h < h_s:
                         f_l_new[i-1, j-1] = 0
@@ -252,12 +248,10 @@ def temperature(T_old, f_l_old, ux_LB, uy_LB, t, T_dim_C, T_dim_H):
     T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
     T_new[1:-1, -1] = 21/23 * T_new[1:-1, -2] + 3/23 * T_new[1:-1, -3] - 1/23 * T_new[1:-1, -4]     # Neumann extrapolation on upper boundary
     T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
-    T_new[0, :] = 16/5 * T_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
-    # T_new[-1, :] = 16/5 * T_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
+    T_new[0, :] = 16/5 * TH - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
+    # T_new[-1, :] = 16/5 * TC - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-    T_dim = beta * (T_new - T0)
-
-    return T_dim, f_l_new
+    return T_new, f_l_new
 
 
 f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)          # Initialize distributions
@@ -286,7 +280,7 @@ for t in range(Nt):
         temp = t * Time / Nt
         t_phys.append(temp)
 
-        Xt = 2 * xi * np.sqrt(alpha * temp)
+        Xt = 2 * xi * np.sqrt(alpha_phys * temp)
         X_th.append(Xt)
 
         # easy_view(1, f_l)
@@ -296,15 +290,15 @@ for t in range(Nt):
         Xt_sim = (idx + 0.5) / Nx * L
         X_sim.append(Xt_sim)
 
-    # if (t % 500000 == 0) and (t > 0):
+    # if (t % 1000000 == 0) and (t > 0):
     #     plt.figure()
-    #     plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+    #     # plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
     #     plt.imshow(T_dim.T/beta+T0, cmap=cm.autumn, origin='lower', aspect=1.0)
     #     plt.xlabel('$x$ (# lattice nodes)')
     #     plt.ylabel('$y$ (# lattice nodes)')
-    #     plt.title(f'Gallium \n $f_l$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    #     plt.title(f'Gallium \n $T$, left wall at $T={T_H}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     #     plt.colorbar()
-    #     plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd.png")
+    #     plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd_dimless.png")
 
         # T = T_dim / beta + T0
 
@@ -319,7 +313,7 @@ plt.xlabel('$x$ (m)')
 plt.ylabel('$t$ (s)')
 plt.legend(['Analytical', 'Simulation'])
 plt.title(f'Gallium \n Position of melting front, wall at $T={np.round(T_H)}K$')
-plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd.png")
+plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd_dimless.png")
 
 # Liquid fraction
 plt.figure()
@@ -328,7 +322,7 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'Gallium \n $f_l$, wall at $T={np.round(T_H)}K$')
 plt.colorbar()
-plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd.png")
+plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd_dimless.png")
 
 easy_view("fL", f_l)
 easy_view("T", T_dim / beta + T0)

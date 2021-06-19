@@ -242,8 +242,6 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
                 else:
                     continue
 
-    # easy_view("fL", f_l)
-    # easy_view("T_new", T_new)
     # Ghost nodes
     T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
     T_new[1:-1, -1] = 21/23 * T_new[1:-1, -2] + 3/23 * T_new[1:-1, -3] - 1/23 * T_new[1:-1, -4]     # Neumann extrapolation on upper boundary

@@ -84,7 +84,7 @@ FoSte_t = Ste * alpha_phys / L**2
 l_relax = 1#0.1
 tau = 0.55
 tau_inv = 1/tau
-Nx = 196
+Nx = 240
 Ny = Nx #np.int(0.714*Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -157,9 +157,9 @@ if alpha > 1/6:
     print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra108/N140/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra108/N100/"
 suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra108/N140/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra108/N100/"
 csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}"
 
 print(suffix)
@@ -493,8 +493,6 @@ def outputs(f_str, T, fL, B, Nu, FoSte, t):
     np.savetxt(csv_path+"ux_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      ux_plot,                delimiter=",")
     np.savetxt(csv_path+"uy_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      uy_plot,                delimiter=",")
     np.savetxt(csv_path+"T_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",       T_phys[1:-1, 1:-1].T,   delimiter=",")
-    np.savetxt(csv_path+"Nu"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",       Nu,                     delimiter=",")
-    np.savetxt(csv_path+"FoSte"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",    FoSte,                  delimiter=",")
 
 
 @njit(fastmath=True)
@@ -547,7 +545,9 @@ stop = time.time()
 run_time = np.array([stop - start])
 print(run_time[0])
 
-np.savetxt(csv_path+"run_time"+csv_file+".csv", run_time, delimiter=",")
+np.savetxt(csv_path+"Nu"+csv_file+f".csv",      Nu,         delimiter=",")
+np.savetxt(csv_path+"FoSte"+csv_file+f".csv",   FoSte,      delimiter=",")
+np.savetxt(csv_path+"run_time"+csv_file+".csv", run_time,   delimiter=",")
 
 FoSte = np.array(FoSte[1:])
 # Nu_corr = (2 * FoSte)**(-1/2) + (0.35 * Ra**(1/4) - (2 * FoSte)**(-1/2)) * (1 + (0.0175 * Ra**(3/4) * FoSte**(3/2))**(-2))**(-1/2)  # High Pr

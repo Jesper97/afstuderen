@@ -211,10 +211,6 @@ def temperature(T_old, f_l_old, ux_LB, uy_LB, t, T_dim_C, T_dim_H):
                 n_iter = 1
 
                 while True:
-                    # T_new[i, j] = T_old[i, j] + alpha * dt / dx**2 * (T_old[i+1, j] - 2 * T_old[i, j] + T_old[i-1, j]) - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
-                    # T_new[i, j] = T_old[i, j] + alpha * dt / dx**2 * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j])\
-                    #               - Lat / c_p * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
-
                     T_new[i, j] = T_old[i, j] - ux[i-1, j-1] * dt / dx * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
                                   - uy[i-1, j-1] * dt / dx * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
                                   + alpha * dt / dx**2 * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j]) \
@@ -229,7 +225,7 @@ def temperature(T_old, f_l_old, ux_LB, uy_LB, t, T_dim_C, T_dim_H):
                     else:
                         f_l_new[i-1, j-1] = (h - h_s) / (h_l - h_s)
 
-                    f_l_new[i-1, j-1] = min(max(f_l_new[i-1, j-1], 0), 1)
+                    # f_l_new[i-1, j-1] = min(max(f_l_new[i-1, j-1], 0), 1)
 
                     if (np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6) and (n_iter >= 3):
                         break

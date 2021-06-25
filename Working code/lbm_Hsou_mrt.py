@@ -157,9 +157,9 @@ if alpha > 1/6:
     print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/{material}/Ra108/N100/tau0.55/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/{material}/Ra108/N240/"
 suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Hsou/{material}/Ra108/N100/tau0.55/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Hsou/{material}/Ra108/N240/"
 csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}"
 print(suffix)
 
@@ -261,14 +261,14 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
 
     for j in prange(1, Ny+1):
         for i in prange(1, Nx+1):
+            constant_terms = T_old[i, j] - ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
+                             - uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
+                             + alpha * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j])
+
             while True:
                 n_iter = 1
-
                 while True:
-                    T_new[i, j] = T_old[i, j] - ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
-                                  - uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
-                                  + alpha * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j]) \
-                                  - Lat / cp * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
+                    T_new[i, j] = constant_terms - Lat / cp * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
 
                     h = cp * T_new[i, j] + f_l_iter[i-1, j-1] * Lat
 

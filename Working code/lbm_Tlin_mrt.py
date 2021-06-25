@@ -157,9 +157,9 @@ if alpha > 1/6:
     print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra108/N100/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Tlin/{material}/Ra108/N240/"
 suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra108/N100/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Tlin/{material}/Ra108/N240/"
 csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}"
 
 print(suffix)

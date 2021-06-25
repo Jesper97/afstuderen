@@ -27,7 +27,7 @@ def easy_view(nr, arr):
 Time = 2000
 W_wall = 0.02
 L_cooled = 0.2
-W = 0.2 + 2 * W_wall
+W = 0.1 + 2 * W_wall
 L = 0.3
 g_phys = 9.81
 g_vec_phys = np.array([0, -g_phys])
@@ -67,7 +67,7 @@ opp = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], dtype=np.int)
 cs = 1/np.sqrt(3)
 
 # Temperatures
-T0_p = 900
+T0_p = 910
 Tsub_p = 20
 TH_p = 923
 TC_p = Tm_salt_p - Tsub_p
@@ -75,15 +75,15 @@ epsilon = 0.01 * (TH_p - TC_p)
 
 # Dimensionless numbers
 Pr = nu_salt_p / alpha_salt_liq_p
-# Ra = g_phys * beta_salt_p * (TH_phys - TC_phys) * H**3 / (nu_phys * alpha_phys)
-# Ste = cp_phys * DT / Lat_phys
+Ra = g_phys * beta_salt_p * (TH_p - TC_p) * (W-2*W_wall)**3 / (nu_salt_p * alpha_salt_liq_p)
+Ste = cp_salt_liq_p * (TH_p - TC_p) / Lat_salt_p
 # FoSte_t = Ste * alpha_phys / L**2
 
 # Simulation parameters
 l_relax = 1
-tau = 0.501
+tau = 0.5005
 tau_inv = 1/tau
-Nx = 200
+Nx = 240
 Ny = np.int(W / L * Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -114,7 +114,7 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/50 - 5)
+Nresponse = np.int(Nt/400 - 5)
 
 # Initial conditions
 cp = cp_p / Ccp
@@ -166,8 +166,8 @@ MSM = np.dot(M_inv, np.dot(S, M))
 material = "LiF-ThF4"
 print("Simulating", material)
 print("Pr =", Pr)
-# print("Ra =", Ra)
-# print("Ste =", Ste)
+print("Ra =", Ra)
+print("Ste =", Ste)
 print("dx =", dx, "dt =", dt)
 print("Nodes:", Nx, "x", Ny)
 print(f"{Nt} steps")
@@ -177,10 +177,10 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/test/"
-suffix = f"freeze_plug_test.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/test/"
-csv_file = f"freeze_plug_test"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/test2/"
+suffix = f"freeze_plug_W=0.1_tau={tau}_N={Nx}x{Ny}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/test2/"
+csv_file = f"freeze_plug_W=0.1_tau={tau}_N={Nx}x{Ny}"
 print(suffix)
 
 
@@ -195,7 +195,10 @@ def initialize(g):
     Si = zeros((Nx, Ny, q))
     F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
 
-    T[1:idx_cooled, :] = (Tm_salt_p - 5 - T0_p) * beta_salt_p
+    T[1:idx_cooled+1, :] = (Tm_salt_p - 5 - T0_p) * beta_salt_p
+    # T_grad = (np.linspace(Tm_salt_p+1, TH_p, Nx-idx_cooled) - T0_p) * beta_salt_p
+    # for j in range(T.shape[1]):
+    #     T[idx_cooled+1:-1, j] = T_grad
 
     return vel, rho, f_new, Si, F, T
 
@@ -214,7 +217,7 @@ def streaming(f_old):
 
 @njit(parallel=True)
 def f_eq(rho, vel):
-    feq = empty((Nx, Ny, q))
+    feq = zeros((Nx, Ny, q))
     for j in prange(Ny):
         for i in prange(Nx):
             for k in prange(q):
@@ -313,13 +316,13 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
                 else:
                     continue
 
-    for j in range(1, idx_boundary+1):
+    for j in prange(1, idx_boundary+1):
         for i in prange(1, Nx+1):
             T_new[i, j] = T_old[i, j] - ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
                           - uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
                           + alpha[i-1, j-1] * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j])
 
-    for j in range(Ny-idx_boundary+1, Ny+1):
+    for j in prange(Ny-idx_boundary+1, Ny+1):
         for i in prange(1, Nx+1):
             T_new[i, j] = T_old[i, j] - ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
                           - uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
@@ -382,7 +385,7 @@ def outputs(f_str, T, fL, B, t):
 
     # Liquid fraction
     plt.figure()
-    plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
+    plt.imshow(fL.T, cmap=cm.RdBu, origin='lower', aspect=1.0)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
     plt.title(f'Octadecane \n $f_L$, $t={np.int(t/Nt*Time)}s$')
@@ -459,6 +462,8 @@ def outputs(f_str, T, fL, B, t):
     plt.title(f'Octadecane \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     plt.colorbar()
     plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
+
+    print("T_max", np.max(T_phys[1:-1, 1:-1]))
     #
     # plt.figure()
     # plt.clf()
@@ -490,10 +495,12 @@ def outputs(f_str, T, fL, B, t):
 
 def solve(fL, B):
     vel, rho, f_str, Si, F, T = initialize(g_vec)
-    Nu = np.array([0], dtype=np.float32)
-    FoSte = np.array([0], dtype=np.float32)
+    T_old = T.copy()
+    fL_old = fL.copy()
 
     for t in range(Nt):
+        t_p = t / Nt * Time
+        TH = (-0.0001 * t_p**2 + 0.5244 * t_p + 923 - T0_p) * beta_salt_p
         T, fL = temperature(T, fL, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
         Si, F = forcing(vel, g_vec, T)
         rho, vel = moment_update(f_str, F, B)
@@ -517,12 +524,22 @@ def solve(fL, B):
         # if (t % 100 == 0) and (t >= 5000):
             outputs(f_str, T, fL, B, t)
 
-    return Nu, FoSte
+        if (t % Nt/2000 == 0) and (t > 100*Nresponse):
+            if (npabs(T - T_old) < 1e-12).all():
+                if (npabs(fL - fL_old) < 1e-12).all():
+                    outputs(f_str, T, fL, B, t)
+                    sys.exit("Convergence reached")
+            if t % 50000 == 0:
+                print("T convergence", np.max(npabs(T - T_old)))
+                print("fL convergence", np.max(npabs(fL - fL_old)))
+
+            T_old = T.copy()
+            fL_old = fL.copy()
 
 
 start = time.time()
 
-Nu, FoSte = solve(fL, B)
+solve(fL, B)
 
 stop = time.time()
 run_time = np.array([stop - start])

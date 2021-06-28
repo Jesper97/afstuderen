@@ -68,7 +68,7 @@ cs = 1/np.sqrt(3)
 
 # Temperatures
 T0_p = 910
-Tsub_p = 20
+Tsub_p = 15
 TH_p = 923
 TC_p = Tm_salt_p - Tsub_p
 epsilon = 0.01 * (TH_p - TC_p)
@@ -81,7 +81,7 @@ Ste = cp_salt_liq_p * (TH_p - TC_p) / Lat_salt_p
 
 # Simulation parameters
 l_relax = 1
-tau = 0.501
+tau = 0.502
 tau_inv = 1/tau
 Nx = 240
 Ny = np.int(W / L * Nx)
@@ -114,18 +114,16 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/400 - 5)
+Nresponse = np.int(Nt/40 - 5)
 
 # Initial conditions
 cp = cp_p / Ccp
 cp_sol = cp_salt_sol_p / Ccp
 alpha = alpha_p / Calpha
-# easy_view(1, alpha)
 alpha_HN = alpha_HN_p / Calpha
 alpha_salt_sol = alpha_salt_sol_p / Calpha
 fL = np.zeros(dim)
 fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
-# easy_view("fL", fL)
 
 B = np.ones(dim)
 h = np.zeros(dim)
@@ -177,10 +175,10 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/test3/"
-suffix = f"freeze_plug_W=0.2_constantT_tau={tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/test3/"
-csv_file = f"freeze_plug_W=0.2_constantT_tau={tau}_N={Nx}x{Ny}"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/tau=0.502/"
+suffix = f"freeze_plug_W=0.2_tau={tau}_N={Nx}x{Ny}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/tau=0.502/"
+csv_file = f"freeze_plug_W=0.2_tau={tau}_N={Nx}x{Ny}"
 print(suffix)
 
 
@@ -195,7 +193,7 @@ def initialize(g):
     Si = zeros((Nx, Ny, q))
     F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
 
-    T[1:idx_cooled+1, :] = (Tm_salt_p - 5 - T0_p) * beta_salt_p
+    T[1:idx_cooled+1, :] = (Tm_salt_p - Tsub_p - T0_p) * beta_salt_p
     # T_grad = (np.linspace(Tm_salt_p+1, TH_p, Nx-idx_cooled) - T0_p) * beta_salt_p
     # for j in range(T.shape[1]):
     #     T[idx_cooled+1:-1, j] = T_grad
@@ -463,7 +461,7 @@ def outputs(f_str, T, fL, B, t):
     plt.colorbar()
     plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
 
-    print("T_max", np.max(T_phys[1:-1, 1:-1]))
+    # print("T_max", np.max(T_phys[1:-1, 1:-1]))
     #
     # plt.figure()
     # plt.clf()
@@ -485,12 +483,12 @@ def outputs(f_str, T, fL, B, t):
     #
     plt.close('all')
 
-    # # Save arrays to CSV-files
-    # np.savetxt(csv_path+"rho_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",     rho,                    delimiter=",")
-    # np.savetxt(csv_path+"fL_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      fL.T,                   delimiter=",")
-    # np.savetxt(csv_path+"ux_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      ux_plot,                delimiter=",")
-    # np.savetxt(csv_path+"uy_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      uy_plot,                delimiter=",")
-    # np.savetxt(csv_path+"T_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",       T_phys[1:-1, 1:-1].T,   delimiter=",")
+    # Save arrays to CSV-files
+    np.savetxt(csv_path+"rho_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",     rho,                    delimiter=",")
+    np.savetxt(csv_path+"fL_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      fL.T,                   delimiter=",")
+    np.savetxt(csv_path+"ux_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      ux_plot,                delimiter=",")
+    np.savetxt(csv_path+"uy_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      uy_plot,                delimiter=",")
+    np.savetxt(csv_path+"T_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",       T_phys[1:-1, 1:-1].T,   delimiter=",")
 
 
 def solve(fL, B):
@@ -524,9 +522,9 @@ def solve(fL, B):
         # if (t % 100 == 0) and (t >= 5000):
             outputs(f_str, T, fL, B, t)
 
-        if (t % Nt/2000 == 0) and (t > 100*Nresponse):
-            if (npabs(T - T_old) < 1e-12).all():
-                if (npabs(fL - fL_old) < 1e-12).all():
+        if (t % Nt/2000 == 0) and (t > 10000):
+            if (npabs(T - T_old) < 1e-8).all():
+                if (npabs(fL - fL_old) < 1e-8).all():
                     outputs(f_str, T, fL, B, t)
                     sys.exit("Convergence reached")
             if t % 50000 == 0:

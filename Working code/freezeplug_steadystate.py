@@ -24,10 +24,10 @@ def easy_view(nr, arr):
 
 
 # Domain parameters
-Time = 2000
+Time = 6000
 W_wall = 0.02
 L_cooled = 0.2
-W = 0.1 + 2 * W_wall
+W = 0.2 + 2 * W_wall
 L = 0.3
 g_phys = 9.81
 g_vec_phys = np.array([0, -g_phys])
@@ -68,7 +68,7 @@ cs = 1/np.sqrt(3)
 
 # Temperatures
 T0_p = 910
-Tsub_p = 20
+Tsub_p = 15
 TH_p = 923
 TC_p = Tm_salt_p - Tsub_p
 epsilon = 0.01 * (TH_p - TC_p)
@@ -81,7 +81,7 @@ Ste = cp_salt_liq_p * (TH_p - TC_p) / Lat_salt_p
 
 # Simulation parameters
 l_relax = 1
-tau = 0.5005
+tau = 0.51
 tau_inv = 1/tau
 Nx = 240
 Ny = np.int(W / L * Nx)
@@ -94,11 +94,11 @@ dim = (Nx, Ny)
 idx_boundary = np.int(W_wall / W * Ny)
 idx_cooled = np.int(L_cooled / L * Nx)
 
-cp_p = cp_salt_liq_p * np.ones(dim)
+cp_p = cp_salt_sol_p * np.ones(dim)
 cp_p[:, 0:idx_boundary] = cp_HN_p
 cp_p[:, -idx_boundary:] = cp_HN_p
 
-alpha_p = alpha_salt_liq_p * np.ones(dim)
+alpha_p = alpha_salt_sol_p * np.ones(dim)
 alpha_p[:, 0:idx_boundary] = alpha_HN_p
 alpha_p[:, -idx_boundary:] = alpha_HN_p
 
@@ -114,18 +114,22 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/400 - 5)
+Nresponse = np.int(Nt/40 - 5)
 
 # Initial conditions
-cp = cp_p / Ccp
 cp_sol = cp_salt_sol_p / Ccp
-alpha = alpha_p / Calpha
-# easy_view(1, alpha)
+cp_liq = cp_salt_liq_p / Ccp
+cp = cp_p / Ccp
+cp[idx_cooled:, idx_boundary:Ny-idx_boundary] = cp_liq
+
 alpha_HN = alpha_HN_p / Calpha
-alpha_salt_sol = alpha_salt_sol_p / Calpha
+alpha_sol = alpha_salt_sol_p / Calpha
+alpha_liq = alpha_salt_liq_p / Calpha
+alpha = alpha_p / Calpha
+alpha[idx_cooled:, idx_boundary:Ny-idx_boundary] = alpha_liq
+
 fL = np.zeros(dim)
 fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
-# easy_view("fL", fL)
 
 B = np.ones(dim)
 h = np.zeros(dim)
@@ -177,10 +181,10 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/test2/"
-suffix = f"freeze_plug_W=0.1_tau={tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/test2/"
-csv_file = f"freeze_plug_W=0.1_tau={tau}_N={Nx}x{Ny}"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/tau=0.51/"
+suffix = f"freeze_plug_W=0.2_tau={tau}_N={Nx}x{Ny}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/tau=0.51/"
+csv_file = f"freeze_plug_W=0.2_tau={tau}_N={Nx}x{Ny}"
 print(suffix)
 
 
@@ -195,10 +199,7 @@ def initialize(g):
     Si = zeros((Nx, Ny, q))
     F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
 
-    T[1:idx_cooled+1, :] = (Tm_salt_p - 5 - T0_p) * beta_salt_p
-    # T_grad = (np.linspace(Tm_salt_p+1, TH_p, Nx-idx_cooled) - T0_p) * beta_salt_p
-    # for j in range(T.shape[1]):
-    #     T[idx_cooled+1:-1, j] = T_grad
+    T[1:idx_cooled+1, :] = (Tm_salt_p - Tsub_p - T0_p) * beta_salt_p
 
     return vel, rho, f_new, Si, F, T
 
@@ -231,8 +232,6 @@ def f_eq(rho, vel):
 @njit
 def collision_speedup(Omegaf, fL, f, Si):
     Bi = zeros((Nx, Ny, 9))
-    #####
-    # B = np.rint((1 - fL) * (tau - 1/2) / (fL + tau - 1/2))
     B = (1 - fL) * (tau - 1/2) / (fL + tau - 1/2)
     for k in range(9):
         Bi[:, :, k] = B
@@ -264,7 +263,7 @@ def forcing(vel, g, T):
 
 
 @njit(parallel=True)
-def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
+def temperature(T_old, f_l_old, cp, alpha, ux, uy, t, TC, TH):
     T_new = np.zeros((Nx+2, Ny+2))
     f_l_new = np.zeros((Nx, Ny))
     l_relax = 1
@@ -303,7 +302,7 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
                     if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6 and (n_iter >= 3):
                         break
                     elif (n_iter > 1000) and (l_relax == 1):
-                        print('yes')
+                        print('yes', t)
                         l_relax = 0.1
                         break
                     else:
@@ -315,6 +314,16 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
                     break
                 else:
                     continue
+
+            if fL[im, jm] == 1:
+                cp[im, jm] = cp_liq
+                alpha[im, jm] = alpha_liq
+            elif fL[im, jm] == 0:
+                cp[im, jm] = cp_sol
+                alpha[im, jm] = alpha_sol
+            else:
+                cp[im, jm] = fL[im, jm] * cp_liq + (1 - fL[im, jm]) * cp_sol
+                alpha[im, jm] = fL[im, jm] * alpha_liq + (1 - fL[im, jm]) * alpha_sol
 
     for j in prange(1, idx_boundary+1):
         for i in prange(1, Nx+1):
@@ -329,17 +338,14 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
                           + alpha[i-1, j-1] * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j])
 
     # Ghost nodes
-    T_new[0, :] = 21/23 * T_new[1, :] + 3/23 * T_new[2, :] - 1/23 * T_new[3, :]                     # Neumann extrapolation on left boundary
-    T_new[-1, :] = 16/5 * TH - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]                 # Dirichlet extrapolation on right boundary
+    T_new[0, :] = 21/23 * T_new[1, :] + 3/23 * T_new[2, :] - 1/23 * T_new[3, :]                                                         # Neumann extrapolation on left boundary
+    T_new[-1, :] = 16/5 * TH - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]                                                     # Dirichlet extrapolation on right boundary
     T_new[1:idx_cooled, -1] = 16/5 * TC - 3 * T_new[1:idx_cooled, -2] + T_new[1:idx_cooled, -3] - 1/5 * T_new[1:idx_cooled, -4]         # Dirichlet extrapolation on upper cold boundary
     T_new[1:idx_cooled, 0] = 16/5 * TC - 3 * T_new[1:idx_cooled, 1] + T_new[1:idx_cooled, 1] - 1/5 * T_new[1:idx_cooled, 1]             # Dirichlet extrapolation on lower cold boundary
     T_new[idx_cooled:-1, -1] = 21/23 * T_new[idx_cooled:-1, -2] + 3/23 * T_new[idx_cooled:-1, -3] - 1/23 * T_new[idx_cooled:-1, -4]     # Neumann extrapolation on upper adiab boundary
     T_new[idx_cooled:-1, 0] = 21/23 * T_new[idx_cooled:-1, 1] + 3/23 * T_new[idx_cooled:-1, 2] - 1/23 * T_new[idx_cooled:-1, 3]         # Neumann extrapolation on lower adiab boundary
 
-    # if t % 10 == 0:
-    #     easy_view("T", T_new)
-
-    return T_new, f_l_new
+    return T_new, f_l_new, cp, alpha
 
 
 @njit(parallel=True)
@@ -463,7 +469,7 @@ def outputs(f_str, T, fL, B, t):
     plt.colorbar()
     plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
 
-    print("T_max", np.max(T_phys[1:-1, 1:-1]))
+    # print("T_max", np.max(T_phys[1:-1, 1:-1]))
     #
     # plt.figure()
     # plt.clf()
@@ -485,7 +491,7 @@ def outputs(f_str, T, fL, B, t):
     #
     plt.close('all')
 
-    # # Save arrays to CSV-files
+    # Save arrays to CSV-files
     # np.savetxt(csv_path+"rho_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",     rho,                    delimiter=",")
     # np.savetxt(csv_path+"fL_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      fL.T,                   delimiter=",")
     # np.savetxt(csv_path+"ux_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      ux_plot,                delimiter=",")
@@ -493,24 +499,23 @@ def outputs(f_str, T, fL, B, t):
     # np.savetxt(csv_path+"T_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",       T_phys[1:-1, 1:-1].T,   delimiter=",")
 
 
-def solve(fL, B):
+def solve(fL, B, cp, alpha):
     vel, rho, f_str, Si, F, T = initialize(g_vec)
     T_old = T.copy()
     fL_old = fL.copy()
 
     for t in range(Nt):
-        t_p = t / Nt * Time
-        TH = (-0.0001 * t_p**2 + 0.5244 * t_p + 923 - T0_p) * beta_salt_p
-        T, fL = temperature(T, fL, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
+        # t_p = t / Nt * Time
+        # TH = (-0.0001 * t_p**2 + 0.5244 * t_p + 923 - T0_p) * beta_salt_p
+        T, fL, cp, alpha = temperature(T, fL, cp, alpha, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
         Si, F = forcing(vel, g_vec, T)
         rho, vel = moment_update(f_str, F, B)
         B, f_col = collision(rho, vel, f_str, Si, fL)
         f_str = streaming(f_col)
+        # easy_view("cp", cp)
 
         if t % 2500 == 0:
             print(t)
-            # print(np.max(vel[:, :, 1]))
-            # print(np.max(fL))
 
             if t == 0:
                 begin = time.time()
@@ -521,12 +526,16 @@ def solve(fL, B):
                 print("Estimated runtime:", mins, "minutes.")
 
         if (t % Nresponse == 0) and (t != 0):
-        # if (t % 100 == 0) and (t >= 5000):
+            easy_view("alpha", alpha)
+            easy_view('cp', cp)
             outputs(f_str, T, fL, B, t)
 
-        if (t % Nt/2000 == 0) and (t > 100*Nresponse):
-            if (npabs(T - T_old) < 1e-12).all():
-                if (npabs(fL - fL_old) < 1e-12).all():
+        if (t % Nt/2000 == 0) and (t > 10000):
+            print("T diff", np.max(npabs(T - T_old)))
+            print("fL diff", np.max(npabs(fL - fL_old)))
+
+            if (npabs(T - T_old) < 1e-8).all():
+                if (npabs(fL - fL_old) < 1e-8).all():
                     outputs(f_str, T, fL, B, t)
                     sys.exit("Convergence reached")
             if t % 50000 == 0:
@@ -539,7 +548,7 @@ def solve(fL, B):
 
 start = time.time()
 
-solve(fL, B)
+solve(fL, B, cp, alpha)
 
 stop = time.time()
 run_time = np.array([stop - start])

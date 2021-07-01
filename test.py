@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import scipy.interpolate as interp
 import sys
 
 # a = np.asarray([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
@@ -20,23 +21,26 @@ def easy_view(nr, arr):
     print(nr, dataset)
 
 
-Nx = 150
-Ny = 35
-L1 = 0.1
-L2 = 0.2
-L = L1 + L2
+Nx = 300
+Ny = 180
+Cu = 0.0013333333333333335 / 0.00291917533296844
+beta_salt_p = 2.79e-4
+T0_p = 920
 
-idx = np.int(L2/L * Nx)
+path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/0degrees/"
+path2 = "_freeze_plug_W=0.2_tau=0.52_N=240x192_t=15000.0.csv"
+rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
 
-x = np.ones((Nx+2, Ny+2), dtype=int)
-x[:, :6] = 2
-x[:, -6:] = 2
-x[:, 0] = 3
-x[:, -1] = 3
+vel = np.zeros((Nx, Ny, 2))
+ux = np.genfromtxt(path1+"ux"+path2, delimiter=',')
+uy = np.genfromtxt(path1+"uy"+path2, delimiter=',')
+vel[:, :, 0] = ux.T / Cu
+vel[:, :, 1] = np.rot90(np.rot90(np.rot90(uy))) / Cu
 
-idx_boundary = 5
-for j in range(Ny+1-idx_boundary, Ny+1):
-    print(x[1, j])
+fL = np.genfromtxt(path1+"fL"+path2, delimiter=',')
+fL = fL.T
 
-
-easy_view(1, x)
+T = np.zeros((Nx+2, Ny+2))
+F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
+T_p = np.genfromtxt(path1+"T"+path2, delimiter=',')
+T = beta_salt_p * (T_p.T - T0_p)

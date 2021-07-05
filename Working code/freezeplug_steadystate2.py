@@ -24,7 +24,7 @@ def easy_view(nr, arr):
 
 
 # Domain parameters
-Time = 300
+Time = 100000
 W_wall = 0.02
 L_cooled = 0.2
 W = 0.2 + 2 * W_wall
@@ -89,7 +89,7 @@ Ste = cp_salt_liq_p * (TH_p - TC_p) / Lat_salt_p
 
 # Simulation parameters
 l_relax = 1
-tau = 0.502
+tau = 0.513
 tau_inv = 1/tau
 Nx = 240
 Ny = np.int(W / L * Nx)
@@ -190,10 +190,10 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/90degrees/L=0.4/"
-suffix = f"_freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/90degrees/L=0.4/"
-csv_file = f"_freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/90degrees/L=0.4/Mb_test/"
+suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/90degrees/L=0.4/Mb_test/"
+csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}"
 print(suffix)
 
 
@@ -214,9 +214,9 @@ def initialize(g):
     # fL = np.zeros(dim)
     # fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
 
-    #### From csv
-    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/90degrees/L=0.4/"
-    path2 = "_freeze_plug_90deg_tau=0.52_N=240x144_t=49999.0.csv"
+    ##### From csv
+    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/90degrees/L=0.4/Mb_test/"
+    path2 = "_freeze_plug_90deg_tau=0.51_N=240x144_t=15000.0.csv"
 
     rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
 
@@ -430,7 +430,7 @@ def outputs(f_str, T, fL, B, t):
     plt.imshow(fL.T, cmap=cm.RdBu, origin='lower', aspect=1.0)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Octadecane \n $f_L$, $t={np.int(t/Nt*Time)}s$')
+    plt.title(f'LiF-ThF$_4$ \n $f_L$, $t={np.int(t/Nt*Time)}s$')
     plt.colorbar()
     plt.savefig(path_name + f"heatmap_fl_t={np.int(t/Nt*Time)}" + suffix)
 
@@ -463,7 +463,7 @@ def outputs(f_str, T, fL, B, t):
     # plt.clabel(CS, inline=True)
     # plt.xlabel('$x$ (# lattice nodes)')
     # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Octadecane \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.title(f'LiF-ThF$_4$ \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     # plt.savefig(path_name + f"contour_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
     #
     # plt.figure()
@@ -472,7 +472,7 @@ def outputs(f_str, T, fL, B, t):
     # plt.clabel(CS, inline=True)
     # plt.xlabel('$x$ (# lattice nodes)')
     # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Octadecane \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.title(f'LiF-ThF$_4$ \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     # plt.savefig(path_name + f"contour_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
     # Velocities
@@ -481,7 +481,7 @@ def outputs(f_str, T, fL, B, t):
     plt.imshow(uy_plot, cmap=cm.Blues)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes) ')
-    plt.title(f'Octadecane \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.title(f'LiF-ThF$_4$ \n $u_y$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     plt.colorbar()
     plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
 
@@ -490,7 +490,7 @@ def outputs(f_str, T, fL, B, t):
     plt.imshow(ux_plot, cmap=cm.Blues, origin='lower')
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Octadecane \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.title(f'LiF-ThF$_4$ \n $u_x$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     plt.colorbar()
     plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
 
@@ -501,7 +501,7 @@ def outputs(f_str, T, fL, B, t):
     plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cmap)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'Octadecane \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.title(f'LiF-ThF$_4$ \n $T$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     plt.colorbar()
     plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
 
@@ -512,7 +512,7 @@ def outputs(f_str, T, fL, B, t):
     # plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
     # plt.xlabel('$x$ (# lattice nodes)')
     # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Octadecane \n $\\rho$, left wall at $T={TH_phys}K$')
+    # plt.title(f'LiF-ThF$_4$ \n $\\rho$, left wall at $T={TH_phys}K$')
     # plt.colorbar()
     # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
     #
@@ -521,7 +521,7 @@ def outputs(f_str, T, fL, B, t):
     # plt.quiver(ux_plot, np.flip(uy_plot, axis=1))
     # plt.xlabel('$x$ (# lattice nodes)')
     # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Octadecane \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    # plt.title(f'LiF-ThF$_4$ \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
     # # plt.legend('Velocity vector')
     # plt.savefig(path_name + f"arrowplot_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
     #

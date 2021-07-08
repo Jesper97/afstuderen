@@ -24,16 +24,17 @@ def easy_view(nr, arr):
 
 
 # Domain parameters
-Time = 100000
+Time_b4 = 0
+Time = 15000
 W_wall = 0.02
 L_cooled = 0.2
-W = 0.2 + 2 * W_wall
+W = 0.1 + 2 * W_wall
 L = 0.4
 g_phys = 9.81
 g_vec_phys = np.array([0, -g_phys])
 
 # Rotation of the domain
-phi = 90        # Degrees
+phi = 30        # Degrees
 phi_ccw = 2 * np.pi * (1 - phi / 360)
 rotation_mat = np.array([[np.cos(phi_ccw), -np.sin(phi_ccw)], [np.sin(phi_ccw), np.cos(phi_ccw)]])
 g_vec_p_rot = np.dot(rotation_mat, g_vec_phys)
@@ -75,7 +76,7 @@ opp = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], dtype=np.int)
 cs = 1/np.sqrt(3)
 
 # Temperatures
-T0_p = 920
+T0_p = 846
 Tsub_p = 15
 TH_p = 923
 TC_p = Tm_salt_p - Tsub_p
@@ -91,7 +92,7 @@ Ste = cp_salt_liq_p * (TH_p - TC_p) / Lat_salt_p
 l_relax = 1
 tau = 0.513
 tau_inv = 1/tau
-Nx = 240
+Nx = 500
 Ny = np.int(W / L * Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -126,7 +127,7 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/5 - 5)
+Nresponse = np.int(Nt/10 - 5)
 
 # Initial conditions
 cp_sol = cp_salt_sol_p / Ccp
@@ -190,52 +191,56 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/90degrees/L=0.4/Mb_test/"
-suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/90degrees/L=0.4/Mb_test/"
-csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/30degrees/W=0.01/N=500/"
+suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_test.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/30degrees/W=0.01/N=500/"
+csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_test"
 print(suffix)
 
 
 def initialize(g):
     ##### From start
-    # rho = rho0 * ones((Nx, Ny))
-    # vel = zeros((Nx, Ny, 2))
-    #
-    # f_new = f_eq(rho, vel)
-    #
-    # T = zeros((Nx+2, Ny+2))
-    #
-    # Si = zeros((Nx, Ny, q))
-    # F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
-    #
-    # T[1:idx_cooled+1, :] = (Tm_salt_p - Tsub_p - T0_p) * beta_salt_p
-    #
-    # fL = np.zeros(dim)
-    # fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
-
-    ##### From csv
-    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/90degrees/L=0.4/Mb_test/"
-    path2 = "_freeze_plug_90deg_tau=0.51_N=240x144_t=15000.0.csv"
-
-    rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
-
+    rho = rho0 * ones((Nx, Ny))
     vel = zeros((Nx, Ny, 2))
-    ux = np.genfromtxt(path1+"ux"+path2, delimiter=',')
-    uy = np.genfromtxt(path1+"uy"+path2, delimiter=',')
-    vel[:, :, 0] = ux.T / Cu
-    vel[:, :, 1] = np.rot90(np.rot90(np.rot90(uy))) / Cu
-
-    fL = np.genfromtxt(path1+"fL"+path2, delimiter=',')
-    fL = fL.T
-
-    T = zeros((Nx+2, Ny+2))
-    F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
-    T_p = np.genfromtxt(path1+"T"+path2, delimiter=',')
-    T = beta_salt_p * (T_p.T - T0_p)
 
     f_new = f_eq(rho, vel)
+
+    T = zeros((Nx+2, Ny+2))
+
     Si = zeros((Nx, Ny, q))
+    F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
+
+    # T[1:idx_cooled+1, :] = (Tm_salt_p - Tsub_p - T0_p) * beta_salt_p
+    T_grad = (np.linspace(Tm_salt_p - Tsub_p, Tm_salt_p-epsilon, idx_cooled) - T0_p) * beta_salt_p
+
+    for j in prange(idx_boundary+1, Ny-idx_boundary+1):
+        T[1:idx_cooled+1, j] = T_grad
+
+    fL = np.zeros(dim)
+    fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
+    # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
+
+    ##### From csv
+    # path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/30degrees/W=0.01/N=400/"
+    # path2 = "_freeze_plug_30deg_tau=0.51_N=400x140_test_t=200.0.csv"
+    # rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
+    #
+    # vel = zeros((Nx, Ny, 2))
+    # ux = np.genfromtxt(path1+"ux"+path2, delimiter=',')
+    # uy = np.genfromtxt(path1+"uy"+path2, delimiter=',')
+    # vel[:, :, 0] = ux.T / Cu
+    # vel[:, :, 1] = np.rot90(np.rot90(np.rot90(uy))) / Cu
+    #
+    # fL = np.genfromtxt(path1+"fL"+path2, delimiter=',')
+    # fL = fL.T
+    #
+    # T = zeros((Nx+2, Ny+2))
+    # F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
+    # T_p = np.genfromtxt(path1+"T"+path2, delimiter=',')
+    # T = beta_salt_p * (T_p.T - T0_p)
+    #
+    # f_new = f_eq(rho, vel)
+    # Si = zeros((Nx, Ny, q))
 
     return vel, rho, f_new, Si, F, T, fL
 
@@ -306,9 +311,8 @@ def temperature(T_old, f_l_old, cp, alpha, ux, uy, t, TC, TH):
 
     Ts = ((Tm_salt_p - epsilon) - T0_p) * beta_salt_p
     Tl = ((Tm_salt_p + epsilon) - T0_p) * beta_salt_p
-    h_s = cp_salt_sol_p * Ts
-
-    h_l = h_s + Lat + (cp_salt_sol_p + cp_salt_liq_p) / 2 * (Tl - Ts)
+    h_s = cp_sol * Ts
+    h_l = h_s + Lat + (cp_sol + cp_liq) / 2 * (Tl - Ts)
 
     f_l_iter = f_l_old.copy()
 
@@ -338,7 +342,7 @@ def temperature(T_old, f_l_old, cp, alpha, ux, uy, t, TC, TH):
                     if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6 and (n_iter >= 3):
                         break
                     elif (n_iter > 1000) and (l_relax == 1):
-                        print('yes', t)
+                        print('No convergence, t =', t)
                         l_relax = 0.1
                         break
                     else:
@@ -430,9 +434,9 @@ def outputs(f_str, T, fL, B, t):
     plt.imshow(fL.T, cmap=cm.RdBu, origin='lower', aspect=1.0)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'LiF-ThF$_4$ \n $f_L$, $t={np.int(t/Nt*Time)}s$')
+    plt.title(f'LiF-ThF$_4$ \n $f_L$, $t={np.round(t/Nt*Time+Time_b4, decimals=2)}s$')
     plt.colorbar()
-    plt.savefig(path_name + f"heatmap_fl_t={np.int(t/Nt*Time)}" + suffix)
+    plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time+Time_b4, decimals=2)}" + suffix)
 
     # Streamlines velocity
     uy_plot = np.rot90(uy_phys)
@@ -481,18 +485,18 @@ def outputs(f_str, T, fL, B, t):
     plt.imshow(uy_plot, cmap=cm.Blues)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes) ')
-    plt.title(f'LiF-ThF$_4$ \n $u_y$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.title(f'LiF-ThF$_4$ \n $u_y$, $t={np.round(t/Nt*Time+Time_b4, decimals=2)}s$')
     plt.colorbar()
-    plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
+    plt.savefig(path_name + f"heatmap_uy_t={np.round(t/Nt*Time+Time_b4, decimals=2)}" + suffix)
 
     plt.figure()
     plt.clf()
     plt.imshow(ux_plot, cmap=cm.Blues, origin='lower')
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'LiF-ThF$_4$ \n $u_x$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.title(f'LiF-ThF$_4$ \n $u_x$, $t={np.round(t/Nt*Time+Time_b4, decimals=2)}s$')
     plt.colorbar()
-    plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
+    plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time+Time_b4, decimals=2)}" + suffix)
 
     # Temperature heatmap
     cmap = cm.get_cmap('PiYG', 11)
@@ -501,11 +505,10 @@ def outputs(f_str, T, fL, B, t):
     plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cmap)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
-    plt.title(f'LiF-ThF$_4$ \n $T$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.title(f'LiF-ThF$_4$ \n $T$, $t={np.round(t/Nt*Time+Time_b4, decimals=2)}s$')
     plt.colorbar()
-    plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
-
-    # print("T_max", np.max(T_phys[1:-1, 1:-1]))
+    plt.show()
+    plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time+Time_b4, decimals=2)}" + suffix)
     #
     # plt.figure()
     # plt.clf()
@@ -515,24 +518,15 @@ def outputs(f_str, T, fL, B, t):
     # plt.title(f'LiF-ThF$_4$ \n $\\rho$, left wall at $T={TH_phys}K$')
     # plt.colorbar()
     # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-    #
-    # # Vector plot
-    # plt.figure()
-    # plt.quiver(ux_plot, np.flip(uy_plot, axis=1))
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'LiF-ThF$_4$ \n $u$ in pipe with left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # # plt.legend('Velocity vector')
-    # plt.savefig(path_name + f"arrowplot_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-    #
+
     plt.close('all')
 
     # Save arrays to CSV-files
-    np.savetxt(csv_path+"rho_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",    rho,       delimiter=",")
-    np.savetxt(csv_path+"fL_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",     fL.T,      delimiter=",")
-    np.savetxt(csv_path+"ux_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",     ux_plot,   delimiter=",")
-    np.savetxt(csv_path+"uy_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",     uy_plot,   delimiter=",")
-    np.savetxt(csv_path+"T_"+csv_file+f"_t={np.round(t/Nt*Time)}.csv",      T_phys.T,  delimiter=",")
+    np.savetxt(csv_path+"rho_"+csv_file+f"_t={np.round(t/Nt*Time+Time_b4)}.csv",    rho,       delimiter=",")
+    np.savetxt(csv_path+"fL_"+csv_file+f"_t={np.round(t/Nt*Time+Time_b4)}.csv",     fL.T,      delimiter=",")
+    np.savetxt(csv_path+"ux_"+csv_file+f"_t={np.round(t/Nt*Time+Time_b4)}.csv",     ux_plot,   delimiter=",")
+    np.savetxt(csv_path+"uy_"+csv_file+f"_t={np.round(t/Nt*Time+Time_b4)}.csv",     uy_plot,   delimiter=",")
+    np.savetxt(csv_path+"T_"+csv_file+f"_t={np.round(t/Nt*Time+Time_b4)}.csv",      T_phys.T,  delimiter=",")
 
 
 def solve(B, cp, alpha):
@@ -541,8 +535,15 @@ def solve(B, cp, alpha):
     fL_old = fL.copy()
 
     for t in range(Nt):
-        # t_p = t / Nt * Time
-        # TH = (-0.0001 * t_p**2 + 0.5244 * t_p + 923 - T0_p) * beta_salt_p
+        t_p = t / Nt * Time
+        # t_p = t / 7136718 * Time
+        # if t_p < 100:
+        #     TC = (846 - 0.22 * t_p - T0_p) * beta_salt_p
+        #     TH = (853 + 0.7 * t_p - T0_p) * beta_salt_p
+        # else:
+        #     TC = (Tm_salt_p - Tsub_p - T0_p) * beta_salt_p
+        #     TH = (923 - T0_p) * beta_salt_p
+
         T, fL, cp, alpha = temperature(T, fL, cp, alpha, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
         Si, F = forcing(vel, g_vec, T)
         rho, vel = moment_update(f_str, F, B)
@@ -560,10 +561,7 @@ def solve(B, cp, alpha):
                 mins = np.round(runtime/60, 1)
                 print("Estimated runtime:", mins, "minutes.")
 
-        if (t % Nresponse == 0) and (t != 0):
-            # easy_view("alpha", alpha)
-            # easy_view('cp', cp)
-            # easy_view('fL', fL )
+        if (t % Nresponse == 0) and t > 20:# (t != 0):
             outputs(f_str, T, fL, B, t)
 
         if (t % Nt/2000 == 0) and (t > 10000):

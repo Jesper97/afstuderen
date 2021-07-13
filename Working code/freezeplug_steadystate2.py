@@ -25,17 +25,17 @@ def easy_view(nr, arr):
 
 # Domain parameters
 Time_b4 = 0
-Time = 15000
+Time = 25000
 W_wall = 0.02
 L_cooled = 0.2
 W = 0.1 + 2 * W_wall
-L = 0.4
+L = 0.3
 g_phys = 9.81
 g_vec_phys = np.array([0, -g_phys])
 
 # Rotation of the domain
-phi = 30        # Degrees
-phi_ccw = 2 * np.pi * (1 - phi / 360)
+phi = 60        # Degrees
+phi_ccw = 2 * np.pi * (1 - phi/360)
 rotation_mat = np.array([[np.cos(phi_ccw), -np.sin(phi_ccw)], [np.sin(phi_ccw), np.cos(phi_ccw)]])
 g_vec_p_rot = np.dot(rotation_mat, g_vec_phys)
 
@@ -77,7 +77,7 @@ cs = 1/np.sqrt(3)
 
 # Temperatures
 T0_p = 846
-Tsub_p = 15
+Tsub_p = 5
 TH_p = 923
 TC_p = Tm_salt_p - Tsub_p
 epsilon = 0.01 * (TH_p - TC_p)
@@ -90,9 +90,9 @@ Ste = cp_salt_liq_p * (TH_p - TC_p) / Lat_salt_p
 
 # Simulation parameters
 l_relax = 1
-tau = 0.513
+tau = 0.5143
 tau_inv = 1/tau
-Nx = 500
+Nx = 375
 Ny = np.int(W / L * Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -127,7 +127,7 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/10 - 5)
+Nresponse = np.int(Nt/50 - 5)
 
 # Initial conditions
 cp_sol = cp_salt_sol_p / Ccp
@@ -191,10 +191,10 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/30degrees/W=0.01/N=500/"
-suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_test.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/30degrees/W=0.01/N=500/"
-csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_test"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_2/60deg/w=002/freezing/N375/"
+suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_2/60deg/w=002/freezing/N375/"
+csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}"
 print(suffix)
 
 
@@ -220,9 +220,9 @@ def initialize(g):
     fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
     # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
 
-    ##### From csv
-    # path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/30degrees/W=0.01/N=400/"
-    # path2 = "_freeze_plug_30deg_tau=0.51_N=400x140_test_t=200.0.csv"
+    #### From csv
+    # path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/60degrees/W=0.01/"
+    # path2 = "_freeze_plug_60deg_tau=0.513_N=400x140_test_t=10000.0.csv"
     # rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
     #
     # vel = zeros((Nx, Ny, 2))
@@ -425,7 +425,6 @@ def moment_plots(f_new, B):
 def outputs(f_str, T, fL, B, t):
     rho, vel = moment_plots(f_str, B)
     T_phys = T / beta_salt_p + T0_p
-    TH_phys = TH / beta_salt_p + T0_p
     ux_phys = vel[:, :, 0] * Cu     # * L / alpha_phys
     uy_phys = vel[:, :, 1] * Cu     # * L / alpha_phys
 
@@ -441,43 +440,6 @@ def outputs(f_str, T, fL, B, t):
     # Streamlines velocity
     uy_plot = np.rot90(uy_phys)
     ux_plot = ux_phys.T
-
-    # plt.clf()
-    # plt.figure()
-    # x = np.linspace(0, 1, Nx)
-    # y = np.linspace(0, 1, Ny)
-    # u = np.linspace(0, 1, 100)
-    # g = np.meshgrid(u, u)
-    # str_pts = list(zip(*(x.flat for x in g)))
-    # plt.streamplot(x, y, ux_plot, np.flip(uy_plot, axis=0),
-    #                linewidth    = 1.5,
-    #                cmap         = 'RdBu_r',
-    #                arrowstyle   = '-',
-    #                start_points = str_pts,
-    #                density      = 1)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.savefig(path_name + f"streamlines_u_t={np.round(t/Nt*Time, decimals=2)}" + suffix)
-    # plt.close()
-
-    # # Contour plots
-    # X, Y = np.meshgrid(x, y)
-    # plt.figure()
-    # CS = plt.contour(X, Y, np.flip(uy_plot, axis=1))
-    # plt.clabel(CS, inline=True)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'LiF-ThF$_4$ \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.savefig(path_name + f"contour_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-    #
-    # plt.figure()
-    # plt.clf()
-    # CS = plt.contour(X, Y, ux_plot)
-    # plt.clabel(CS, inline=True)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'LiF-ThF$_4$ \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.savefig(path_name + f"contour_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
     # Velocities
     plt.figure()
@@ -507,17 +469,7 @@ def outputs(f_str, T, fL, B, t):
     plt.ylabel('$y$ (# lattice nodes)')
     plt.title(f'LiF-ThF$_4$ \n $T$, $t={np.round(t/Nt*Time+Time_b4, decimals=2)}s$')
     plt.colorbar()
-    plt.show()
     plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time+Time_b4, decimals=2)}" + suffix)
-    #
-    # plt.figure()
-    # plt.clf()
-    # plt.imshow(np.flip(rho, axis=1).T, cmap=cm.Blues)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'LiF-ThF$_4$ \n $\\rho$, left wall at $T={TH_phys}K$')
-    # plt.colorbar()
-    # plt.savefig(path_name + f"heatmap_rho_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
 
     plt.close('all')
 
@@ -535,15 +487,7 @@ def solve(B, cp, alpha):
     fL_old = fL.copy()
 
     for t in range(Nt):
-        t_p = t / Nt * Time
-        # t_p = t / 7136718 * Time
-        # if t_p < 100:
-        #     TC = (846 - 0.22 * t_p - T0_p) * beta_salt_p
-        #     TH = (853 + 0.7 * t_p - T0_p) * beta_salt_p
-        # else:
-        #     TC = (Tm_salt_p - Tsub_p - T0_p) * beta_salt_p
-        #     TH = (923 - T0_p) * beta_salt_p
-
+        TH = (923 - T0_p) * beta_salt_p
         T, fL, cp, alpha = temperature(T, fL, cp, alpha, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
         Si, F = forcing(vel, g_vec, T)
         rho, vel = moment_update(f_str, F, B)
@@ -561,7 +505,7 @@ def solve(B, cp, alpha):
                 mins = np.round(runtime/60, 1)
                 print("Estimated runtime:", mins, "minutes.")
 
-        if (t % Nresponse == 0) and t > 20:# (t != 0):
+        if (t % Nresponse == 0):# and (t != 0):
             outputs(f_str, T, fL, B, t)
 
         if (t % Nt/2000 == 0) and (t > 10000):

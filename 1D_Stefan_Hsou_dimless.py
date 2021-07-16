@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import scipy.special as spec
 import streaming as str
 import sys
 import time
@@ -35,8 +36,8 @@ folder_nr = '1d_stefan'
 # umax = np.sqrt(g * beta * (T_H - T0) * L)           # Maximal velocity
 
 # Physical parameters gallium
-Time = 500         # (s)
-L = 0.01             # Length of cavity (m)
+Time = 200         # (s)
+L = 0.05             # Length of cavity (m)
 H = 0.714*L      # Height of cavity (m)
 g = 9.81            # Gravitational acceleration (m/s^2)
 rho0 = 6.093e3      # Density (kg/m^3)
@@ -44,17 +45,17 @@ lbda = 33           # Thermal conductivity (W/m K)
 mu = 1.81e-3        # Dynamic viscosity (Ns/m^2)
 nu = mu / rho0      # Kinematic viscosity (m^2/s)
 beta = 1.2e-4       # Thermal expansion (1/K)
-Lat_phys = 8.016e5       # Latent heat (J/kg)
+Lat_phys = 8.016e4       # Latent heat (J/kg)
 cp_phys = 381           # Specific heat (J/(kgK))
 alpha_phys = lbda / (rho0 * cp_phys)     # Thermal diffusivity (m^2/s)
 print("a", alpha_phys)
 Tm_phys = 302.8          # Melting point (K)
 
 # Domain parameters
-T0 = 302.67          # Starting temperature (K)
-T_H = 305           # Hot wall temperature (K)
+T0 = 302.5          # Starting temperature (K)
+T_H = 322.5           # Hot wall temperature (K)
 T_C = 301.3         # Cold wall temperature (K)
-epsilon = 0.01 * (T_H - Tm_phys) * beta  # 0.05 * (T_H - T_C)  # Width mushy zone (K)
+epsilon = 0.01 * (T_H - T0) * beta  # 0.05 * (T_H - T_C)  # Width mushy zone (K)
 umax = np.sqrt(g * beta * (T_H - T0) * H)           # Maximal velocity
 
 # Dimensionless numbers
@@ -66,10 +67,10 @@ Ma = 0.1                                            # Mach number
 
 # Choose simulation parameters
 Lambda = 1/4        # Magic parameter
-tau_plus = 0.506     # Even relaxation time
+tau_plus = 0.502     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Nx = 80             # Nodes in y-direction
-Ny = 10 #np.int(0.714*Nx)
+Nx = 160             # Nodes in y-direction
+Ny = 3 #np.int(0.714*Nx)
 
 dx_sim = 1          # simulation length
 dt_sim = 1          # simulation time
@@ -128,7 +129,12 @@ T_dim_H = np.ones(Ny+2) * beta * (T_H - T0)
 T_dim_C = np.ones(Ny+2) * beta * (T_C - T0)
 
 # 1D Stefan problem
-xi = 0.02286148
+xi = 0.21311164
+
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/1d_stefan/hsource/N160/sim_data/"
+csv_file = f"_x_pos_tau{tau_plus}_t{np.int(Time)}.csv"
+png_path = f"/Users/Jesper/Documents/MEP/Code/Working code/1d_stefan/hsource/N160/figures/"
+png_file = f"_x_pos_tau{tau_plus}_t{np.int(Time)}.png"
 
 def easy_view(nr, arr):
     idx = ["idx" for i in arr[1, :]]
@@ -201,6 +207,8 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
 
     f_l_iter = f_l_old.copy()
 
+    N_it = 0
+
     for j in range(1, Ny+1):
         for i in range(1, Nx+1):
             while True:
@@ -238,6 +246,8 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
                     n_iter += 1
 
                 if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6:
+                    if n_iter > N_it:
+                        N_it = n_iter
                     break
                 else:
                     continue
@@ -249,7 +259,7 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
     T_new[0, :] = 16/5 * TH - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
     # T_new[-1, :] = 16/5 * TC - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-    return T_new, f_l_new
+    return T_new, f_l_new, N_it
 
 
 f_plus, f_minus = f_equilibrium(w_i, rho_sim, ux, uy, c_i, q, c_s)          # Initialize distributions
@@ -260,6 +270,7 @@ X_th = []
 X_sim = []
 t_phys = []
 
+N_tot = 0
 for t in range(Nt):
     ### Forcing
     T_dim_phys = T_dim[1:-1, 1:-1]                                          # Select only physical domain w/out ghost nodes
@@ -268,8 +279,9 @@ for t in range(Nt):
     uy = 0 * T_dim_phys   # Calculate y velocity (odd parts due to symmetry)
 
     ### Temperature
-    T_dim, f_l = temperature(T_dim, f_l, ux, uy, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
+    T_dim, f_l, N_it = temperature(T_dim, f_l, ux, uy, t, T_dim_C, T_dim_H)                   # Calculate temperature and liquid fraction
 
+    N_tot += N_it
     ### Plots
     if t % 10000 == 0:
         print(t)
@@ -288,6 +300,7 @@ for t in range(Nt):
         Xt_sim = (idx + 0.5) / Nx * L
         X_sim.append(Xt_sim)
 
+
     # if (t % 1000000 == 0) and (t > 0):
     #     plt.figure()
     #     # plt.imshow(f_l.T, cmap=cm.autumn, origin='lower', aspect=1.0)
@@ -298,7 +311,8 @@ for t in range(Nt):
     #     plt.colorbar()
     #     plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd_dimless.png")
 
-        # T = T_dim / beta + T0
+
+T = T_dim / beta + T0
 
 # Make arrays from lists
 t_phys = np.array(t_phys)
@@ -311,7 +325,7 @@ plt.xlabel('$x$ (m)')
 plt.ylabel('$t$ (s)')
 plt.legend(['Analytical', 'Simulation'])
 plt.title(f'Gallium \n Position of melting front, wall at $T={np.round(T_H)}K$')
-plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd_dimless.png")
+plt.savefig(png_path + "x_pos" + png_file)
 
 # Liquid fraction
 plt.figure()
@@ -320,10 +334,36 @@ plt.xlabel('$x$ (# lattice nodes)')
 plt.ylabel('$y$ (# lattice nodes)')
 plt.title(f'Gallium \n $f_l$, wall at $T={np.round(T_H)}K$')
 plt.colorbar()
-plt.savefig(f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/Smeltfront/heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_9point_fd_dimless.png")
+plt.savefig(png_path + "f_l" + png_file)
+plt.close()
+plt.clf()
 
-easy_view("fL", f_l)
-easy_view("T", T_dim / beta + T0)
+x = np.linspace(0, L, T[1:-1, :].shape[0]) + 0.5 / Nx * L
+T_th = np.zeros(x.shape)
+for i, pos in enumerate(x):
+    if pos < X_th[-1]:
+        T_th[i] = T_H - (T_H - Tm_phys) * spec.erf(pos / (2*np.sqrt(alpha_phys * Time))) / spec.erf(xi)
+    else:
+        T_th[i] = Tm_phys
+
+plt.figure()
+plt.plot(x, T_th, 'k')
+plt.plot(x, T[1:-1, :], 'o')
+plt.xlabel('$x$ (m)')
+plt.ylabel('$T$ (K)')
+plt.legend(['Analytical', 'Simulation'])
+plt.title(f'Gallium \n Temperature')
+plt.savefig(png_path + "T" + png_file)
+
+np.savetxt(csv_path+"x_th"+csv_file,    X_th,   delimiter=",")
+np.savetxt(csv_path+"x_sim"+csv_file,   X_sim,  delimiter=",")
+np.savetxt(csv_path+"T"+csv_file,       T,      delimiter=",")
 
 stop = time.time()
 print(stop-start)
+
+run_time = np.array([stop-start])
+average_iter = np.array([N_tot / Nt])
+
+np.savetxt(csv_path+"run_time"+csv_file,    run_time,   delimiter=",")
+np.savetxt(csv_path+"average_iterations"+csv_file,    average_iter,   delimiter=",")

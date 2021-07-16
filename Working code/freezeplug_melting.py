@@ -25,16 +25,16 @@ def easy_view(nr, arr):
 
 # Domain parameters
 Time_b4 = 0
-Time = 5000
+Time = 2000
 W_wall = 0.02
 L_cooled = 0.2
 W = 0.1 + 2 * W_wall
-L = 0.4
+L = 0.2
 g_phys = 9.81
 g_vec_phys = np.array([0, -g_phys])
 
 # Rotation of the domain
-phi = 60        # Degrees
+phi = 90        # Degrees
 phi_ccw = 2 * np.pi * (1 - phi / 360)
 rotation_mat = np.array([[np.cos(phi_ccw), -np.sin(phi_ccw)], [np.sin(phi_ccw), np.cos(phi_ccw)]])
 g_vec_p_rot = np.dot(rotation_mat, g_vec_phys)
@@ -77,7 +77,7 @@ cs = 1/np.sqrt(3)
 
 # Temperatures
 T0_p = 846
-Tsub_p = 15
+Tsub_p = 5
 TH_p = 923
 TC_p = Tm_salt_p - Tsub_p
 epsilon = 0.01 * (TH_p - TC_p)
@@ -92,7 +92,7 @@ Ste = cp_salt_liq_p * (TH_p - TC_p) / Lat_salt_p
 l_relax = 1
 tau = 0.5143
 tau_inv = 1/tau
-Nx = 400
+Nx = 200
 Ny = np.int(W / L * Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -127,7 +127,7 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/20 - 5)
+Nresponse = np.int(Nt/25 - 5)
 
 # Initial conditions
 cp_sol = cp_salt_sol_p / Ccp
@@ -191,56 +191,56 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Freeze Plug/60degrees/W=0.02/Melting/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_2/60deg/w=002/melting/N300/test/"
 suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_melting.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/60degrees/W=0.02/Melting/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_2/60deg/w=002/melting/N300/test/"
 csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_melting"
 print(suffix)
 
 
 def initialize(g):
     ##### From start
-    # rho = rho0 * ones((Nx, Ny))
-    # vel = zeros((Nx, Ny, 2))
-    #
-    # f_new = f_eq(rho, vel)
-    #
-    # T = zeros((Nx+2, Ny+2))
-    #
-    # Si = zeros((Nx, Ny, q))
-    # F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
-    #
-    # # T[1:idx_cooled+1, :] = (Tm_salt_p - Tsub_p - T0_p) * beta_salt_p
-    # T_grad = (np.linspace(Tm_salt_p - Tsub_p, Tm_salt_p-epsilon, idx_cooled) - T0_p) * beta_salt_p
-    #
-    # for j in prange(idx_boundary+1, Ny-idx_boundary+1):
-    #     T[1:idx_cooled+1, j] = T_grad
-    #
-    # fL = np.zeros(dim)
-    # fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
-    # # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
-
-    #### From csv
-    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Freeze Plug/60degrees/W=0.02/Freezing/"
-    path2 = "_freeze_plug_60deg_tau=0.513_N=400x140_test_t=25000.0.csv"
-    rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
-
+    rho = rho0 * ones((Nx, Ny))
     vel = zeros((Nx, Ny, 2))
-    ux = np.genfromtxt(path1+"ux"+path2, delimiter=',')
-    uy = np.genfromtxt(path1+"uy"+path2, delimiter=',')
-    vel[:, :, 0] = ux.T / Cu
-    vel[:, :, 1] = np.rot90(np.rot90(np.rot90(uy))) / Cu
-
-    fL = np.genfromtxt(path1+"fL"+path2, delimiter=',')
-    fL = fL.T
-
-    T = zeros((Nx+2, Ny+2))
-    F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
-    T_p = np.genfromtxt(path1+"T"+path2, delimiter=',')
-    T = beta_salt_p * (T_p.T - T0_p)
 
     f_new = f_eq(rho, vel)
+
+    T = zeros((Nx+2, Ny+2))
+
     Si = zeros((Nx, Ny, q))
+    F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
+
+    T[1:idx_cooled+1, :] = (Tm_salt_p - Tsub_p - T0_p) * beta_salt_p
+    # T_grad = (np.linspace(Tm_salt_p - Tsub_p, Tm_salt_p-epsilon, idx_cooled) - T0_p) * beta_salt_p
+
+    # for j in prange(idx_boundary+1, Ny-idx_boundary+1):
+    #     T[1:idx_cooled+1, j] = T_grad
+
+    fL = np.zeros(dim)
+    # fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
+    # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
+
+    #### From csv
+    # path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_2/60deg/w=002/freezing/N300/"
+    # path2 = "_freeze_plug_60deg_tau=0.5143_N=300x140_t=24999.0.csv"
+    # rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
+    #
+    # vel = zeros((Nx, Ny, 2))
+    # ux = np.genfromtxt(path1+"ux"+path2, delimiter=',')
+    # uy = np.genfromtxt(path1+"uy"+path2, delimiter=',')
+    # vel[:, :, 0] = ux.T / Cu
+    # vel[:, :, 1] = np.rot90(np.rot90(np.rot90(uy))) / Cu
+    #
+    # fL = np.genfromtxt(path1+"fL"+path2, delimiter=',')
+    # fL = fL.T
+    #
+    # T = zeros((Nx+2, Ny+2))
+    # F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
+    # T_p = np.genfromtxt(path1+"T"+path2, delimiter=',')
+    # T = beta_salt_p * (T_p.T - T0_p)
+    #
+    # f_new = f_eq(rho, vel)
+    # Si = zeros((Nx, Ny, q))
 
     return vel, rho, f_new, Si, F, T, fL
 
@@ -426,7 +426,7 @@ def moment_plots(f_new, B):
 def check_for_melting(fL):
     melted_row = np.zeros((1, Ny))
     for j in range(idx_boundary, Ny-idx_boundary):
-        melted_row[0, j] = np.all(fL[:, j] < 0.5)
+        melted_row[0, j] = np.all(fL[:, j] > 0.5)
 
     melted = np.any(melted_row)
 
@@ -541,27 +541,21 @@ def outputs(f_str, T, fL, B, t):
 
 def solve(B, cp, alpha):
     vel, rho, f_str, Si, F, T, fL = initialize(g_vec)
-    T_old = T.copy()
-    fL_old = fL.copy()
 
     for t in range(Nt):
-        t_p = t / Nt * Time
-        TH_p = 923 + 0.5244 * t_p - 0.0001 * t_p**2
-        TH = (TH_p - T0_p) * beta_salt_p
-
         T, fL, cp, alpha = temperature(T, fL, cp, alpha, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
         Si, F = forcing(vel, g_vec, T)
         rho, vel = moment_update(f_str, F, B)
         B, f_col = collision(rho, vel, f_str, Si, fL)
         f_str = streaming(f_col)
-
-        # easy_view("T", T)
+        # easy_view("fL", fL)
 
         melted = check_for_melting(fL)
 
         if melted:
             t_ = t/Nt*Time+Time_b4
-            np.savetxt(csv_path+"melting_time_"+csv_file+f"_t={np.round(t/Nt*Time+Time_b4)}.csv", t_, delimiter=",")
+            arr = np.array([t_])
+            np.savetxt(csv_path+"melting_time_"+csv_file+f"_t={np.round(t/Nt*Time+Time_b4)}.csv", arr, delimiter=",")
             break
 
         if t % 2500 == 0:
@@ -578,20 +572,20 @@ def solve(B, cp, alpha):
         if (t % Nresponse == 0):# and (t != 0):
             outputs(f_str, T, fL, B, t)
 
-        if (t % Nt/2000 == 0) and (t > 10000):
-            print("T diff", np.max(npabs(T - T_old)))
-            print("fL diff", np.max(npabs(fL - fL_old)))
-
-            if (npabs(T - T_old) < 1e-6).all():
-                if (npabs(fL - fL_old) < 1e-6).all():
-                    outputs(f_str, T, fL, B, t)
-                    sys.exit("Convergence reached")
-            if t % 50000 == 0:
-                print("T convergence", np.max(npabs(T - T_old)))
-                print("fL convergence", np.max(npabs(fL - fL_old)))
-
-            T_old = T.copy()
-            fL_old = fL.copy()
+        # if (t % Nt/2000 == 0) and (t > 10000):
+        #     print("T diff", np.max(npabs(T - T_old)))
+        #     print("fL diff", np.max(npabs(fL - fL_old)))
+        #
+        #     if (npabs(T - T_old) < 1e-6).all():
+        #         if (npabs(fL - fL_old) < 1e-6).all():
+        #             outputs(f_str, T, fL, B, t)
+        #             sys.exit("Convergence reached")
+        #     if t % 50000 == 0:
+        #         print("T convergence", np.max(npabs(T - T_old)))
+        #         print("fL convergence", np.max(npabs(fL - fL_old)))
+        #
+        #     T_old = T.copy()
+        #     fL_old = fL.copy()
 
 
 start = time.time()

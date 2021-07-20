@@ -25,8 +25,8 @@ def easy_view(nr, arr):
 
 # Domain parameters
 Time_b4 = 0
-Time = 20000
-W_wall = 0.025
+Time = 10000
+W_wall = 0.05
 L_cooled = 0.2
 W = 0.1 + 2 * W_wall
 L = 0.3
@@ -92,7 +92,7 @@ Ste = cp_salt_liq_p * (TH_p - TC_p) / Lat_salt_p
 l_relax = 1
 tau = 0.5143
 tau_inv = 1/tau
-Nx = 375
+Nx = 300
 Ny = np.int(W / L * Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -127,7 +127,7 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/25 - 5)
+Nresponse = np.int(Nt/5 - 5)
 
 # Initial conditions
 cp_sol = cp_salt_sol_p / Ccp
@@ -191,9 +191,9 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_3/30deg/w=2.5/freezing/N375/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_3/30deg/w=5/freezing/"
 suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/freezing/N375/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=5/freezing/"
 csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}"
 print(suffix)
 
@@ -221,8 +221,8 @@ def initialize(g):
     # # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
 
     #### From csv
-    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/freezing/N375/"
-    path2 = "_freeze_plug_30deg_tau=0.5143_N=375x187_t=3360.0.csv"
+    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/freezing/N300/"
+    path2 = "_freeze_plug_40deg_tau=0.5143_N=300x150_t=30000.0.csv"
 
     rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
 

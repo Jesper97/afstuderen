@@ -68,7 +68,7 @@ Ma = 0.1                                            # Mach number
 Lambda = 1/4        # Magic parameter
 tau_plus = 0.502     # Even relaxation time
 rho0_sim = 1        # Starting simulation density
-Nx = 160              # Nodes in y-direction
+Nx = 80              # Nodes in y-direction
 Ny = 3 #np.int(0.714*Nx)
 
 dx_sim = 1          # simulation length
@@ -139,9 +139,9 @@ T_dim_C = beta * (T_C - T0)
 # 1D Stefan problem
 xi = 0.21311164
 
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/1d_stefan/tlinear/N160/sim_data/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/1d_stefan/tlinear/N80/sim_data/"
 csv_file = f"_x_pos_tau{tau_plus}_t{np.int(Time)}.csv"
-png_path = f"/Users/Jesper/Documents/MEP/Code/Working code/1d_stefan/tlinear/N160/figures/"
+png_path = f"/Users/Jesper/Documents/MEP/Code/Working code/1d_stefan/tlinear/N80/figures/"
 png_file = f"_x_pos_tau{tau_plus}_t{np.int(Time)}.png"
 
 def easy_view(nr, arr):
@@ -270,7 +270,7 @@ def temperature(T_iter, h_old, c_app_iter, f_l_old, ux, uy, rho, T_dim_C, T_dim_
         T_new[0, :] = 16/5 * T_dim_H - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
         # T_new[-1, :] = 16/5 * T_C - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-        if np.any(np.abs(f_l - f_l_iter)) < 1e-5:
+        if np.any(np.abs(f_l - f_l_iter)) < 1e-6:# and (n_iter >= 3):
             if n_iter > N_it:
                 N_it = n_iter
             break
@@ -313,7 +313,7 @@ for t in range(Nt):
     if t % 10000 == 0:
         print(t)
 
-    if (t % 1000 == 0) and (t > 0):
+    if (t % 1 == 0): # and (t > 0):
         temp = t * Time / Nt
         t_phys.append(temp)
 
@@ -383,6 +383,7 @@ plt.savefig(png_path + "T" + png_file)
 np.savetxt(csv_path+"x_th"+csv_file,    X_th,   delimiter=",")
 np.savetxt(csv_path+"x_sim"+csv_file,   X_sim,  delimiter=",")
 np.savetxt(csv_path+"T"+csv_file,       T,      delimiter=",")
+np.savetxt(csv_path+"tp"+csv_file,      t_phys,      delimiter=",")
 
 stop = time.time()
 print(stop-start)

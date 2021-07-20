@@ -15,7 +15,7 @@ suffix = "Ra10^5_MRT_Guo_Fuentes.png"
 Nresponse = 125000
 
 # Domain parameters
-Time = 50
+Time = 150
 L = 0.1
 H = L
 g_phys = 9.81
@@ -25,12 +25,12 @@ g_vec_phys = np.array([0, -g_phys])
 rho_phys = 0.9458
 cp_phys = 1009
 lbda_phys = 0.03095
-alpha_phys = 3.243e-5
+alpha_phys = 3.243e-5 * 0.7/0.71
 nu_phys = 2.2701e-5
 beta_phys = 0.0034
 
 # Temperature
-DT = 22.072118186724223
+DT = 22.072118186724223 / 1 * 0.7/0.71
 T0_phys = 300
 TH_phys = T0_phys + DT/2
 TC_phys = T0_phys - DT/2
@@ -51,7 +51,7 @@ cs = 1/np.sqrt(3)
 # Simulation parameters
 tau = 0.55
 tau_inv = 1/tau
-Nx = 80
+Nx = 100
 Ny = Nx
 rho0 = 1
 
@@ -119,6 +119,11 @@ print("Nodes:", Nx, "x", Ny)
 print(f"{Nt} steps")
 if alpha > 1/6:
     print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
+
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/natural_convection/Ra106/figures/"
+suffix = f"_naturalconv_Ra{np.int(Ra)}_tau={tau}_N={Nx}x{Ny}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/natural_convection/Ra106/sim_data/"
+csv_file = f"_naturalconv_Ra{np.int(Ra)}_tau={tau}_N={Nx}x{Ny}.csv"
 
 
 def easy_view(nr, arr):
@@ -254,6 +259,13 @@ def moment_plots(f_new):
     return rho, vel
 
 
+@njit(fastmath=True)
+def nusselt(T, t):
+    Nu = np.float32(-(1 / (beta_phys * DT)) * np.sum(T[1, 1:-1] - T[0, 1:-1]))
+    # Nu = -(1 / (beta_phys * DT)) * npsum((-23 * T[0, 1:-1] + 21 * T[1, 1:-1] + 3 * T[2, 1:-1] - T[3, 1:-1]) / 24)
+    return Nu
+
+
 def solve():
     vel, rho, f_str, Si, F, T = initialize(g_vec)
 
@@ -266,7 +278,7 @@ def solve():
 
         if t % 2500 == 0:
             print(t)
-            print(np.max(vel[:, :, 1]))
+            # print(np.max(vel[:, :, 1]))
 
             if t == 0:
                 begin = time.time()
@@ -275,6 +287,8 @@ def solve():
                 runtime = (end - begin) * Nt / 7500
                 mins = np.round(runtime/60, 1)
                 print(f"Estimated runtime: {mins} minutes.")
+
+    Nu = nusselt(T, t)
 
     rho, vel = moment_plots(f_str)
     T_phys = T / beta_phys + T0_phys
@@ -288,56 +302,63 @@ def solve():
     print("z", z)
     print("w", np.max(uy_phys[:, Ny // 2]))
     print("x", x)
+    print("Nu", Nu)
 
-    # # Liquid fraction
-    # plt.figure()
-    # plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Air \n $f_l$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.colorbar()
-    # plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    max_u = np.array([np.max(ux_phys[Nx // 2, :])])
+    z_max_u = np.array([z])
+    max_w = np.array([np.max(uy_phys[:, Ny // 2])])
+    x_max_w = np.array([x])
+
+    np.savetxt(csv_path+"_Nu"+csv_file,       np.array([Nu]),   delimiter=",")
+    np.savetxt(csv_path+"_max_u"+csv_file,    max_u,   delimiter=",")
+    np.savetxt(csv_path+"_z_max_u"+csv_file,  z_max_u, delimiter=",")
+    np.savetxt(csv_path+"_max_w"+csv_file,    max_w,   delimiter=",")
+    np.savetxt(csv_path+"_x_max_w"+csv_file,  x_max_w, delimiter=",")
+
+    np.savetxt(csv_path+"_T"+csv_file,    T_phys,   delimiter=",")
+    np.savetxt(csv_path+"_u"+csv_file,    ux_phys,   delimiter=",")
+    np.savetxt(csv_path+"_w"+csv_file,    uy_phys,   delimiter=",")
 
     # Streamlines velocity
     uy_plot = np.rot90(uy_phys)
     ux_plot = ux_phys.T
 
-    plt.clf()
-    plt.figure()
+    # plt.clf()
+    # plt.figure()
     x = np.linspace(0, 1, Nx)
     y = np.linspace(0, 1, Ny)
     u = np.linspace(0, 1, 100)
     g = np.meshgrid(u, u)
-    str_pts = list(zip(*(x.flat for x in g)))
-    plt.streamplot(x, y, ux_plot, np.flip(uy_plot, axis=0),
-                   linewidth    = 1.5,
-                   cmap         = 'RdBu_r',
-                   arrowstyle   = '-',
-                   start_points = str_pts,
-                   density      = 1)
+    # str_pts = list(zip(*(x.flat for x in g)))
+    # plt.streamplot(x, y, ux_plot, np.flip(uy_plot, axis=0),
+    #                linewidth    = 1.5,
+    #                cmap         = 'RdBu_r',
+    #                arrowstyle   = '-',
+    #                start_points = str_pts,
+    #                density      = 1)
+    # plt.xlabel('$x$ (# lattice nodes)')
+    # plt.ylabel('$y$ (# lattice nodes)')
+    # plt.savefig(path_name + f"streamlines_u_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    # plt.close()
+
+    # Contour plots
+    X, Y = np.meshgrid(x, y)
+    plt.figure()
+    CS = plt.contour(X, Y, np.flip(uy_plot, axis=1))
+    plt.clabel(CS, inline=True)
     plt.xlabel('$x$ (# lattice nodes)')
     plt.ylabel('$y$ (# lattice nodes)')
-    plt.savefig(path_name + f"streamlines_u_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-    plt.close()
+    plt.title(f'Air \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.savefig(path_name + f"_contour_u" + suffix)
 
-    # # Contour plots
-    # X, Y = np.meshgrid(x, y)
-    # plt.figure()
-    # CS = plt.contour(X, Y, np.flip(uy_plot, axis=1))
-    # plt.clabel(CS, inline=True)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Air \n $u_y$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.savefig(path_name + f"contour_uy_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
-    #
-    # plt.figure()
-    # plt.clf()
-    # CS = plt.contour(X, Y, ux_plot)
-    # plt.clabel(CS, inline=True)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Air \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.savefig(path_name + f"contour_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    plt.figure()
+    plt.clf()
+    CS = plt.contour(X, Y, ux_plot)
+    plt.clabel(CS, inline=True)
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.title(f'Air \n $u_x$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.savefig(path_name + f"_contour_w" + suffix)
     #
     # # Velocities
     # plt.figure()
@@ -358,16 +379,16 @@ def solve():
     # plt.colorbar()
     # plt.savefig(path_name + f"heatmap_ux_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
     #
-    # ## Temperature heatmap
-    # cmap = cm.get_cmap('PiYG', 11)
-    # plt.figure()
-    # plt.clf()
-    # plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cmap)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Air \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.colorbar()
-    # plt.savefig(path_name + f"heatmap_T_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}" + suffix)
+    ## Temperature heatmap
+    cmap = cm.get_cmap('PiYG', 11)
+    plt.figure()
+    plt.clf()
+    plt.imshow(np.flip(T_phys[1:-1, 1:-1].T, axis=0), cmap=cmap)
+    plt.xlabel('$x$ (# lattice nodes)')
+    plt.ylabel('$y$ (# lattice nodes)')
+    plt.title(f'Air \n $T$, left wall at $T={TH_phys}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
+    plt.colorbar()
+    plt.savefig(path_name + f"_contour_T" + suffix)
     #
     # # plt.figure()
     # # plt.clf()
@@ -389,27 +410,6 @@ def solve():
 
     plt.close('all')
 
-    # # Make arrays from lists
-    # t_phys = np.array(t_phys)
-    # X_th = np.array(X_th)
-    # X_sim = np.array(X_sim)
-    # plt.figure()
-    # plt.plot(X_th, t_phys)
-    # plt.plot(X_sim, t_phys)
-    # plt.xlabel('$x$ (m)')
-    # plt.ylabel('$t$ (s)')
-    # plt.title(f'Air \n Position of melting front, left wall at $T={TH}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.savefig(path_name + f"x_pos_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
-    #
-    # # Liquid fraction
-    # plt.figure()
-    # plt.imshow(fL.T, cmap=cm.autumn, origin='lower', aspect=1.0)
-    # plt.xlabel('$x$ (# lattice nodes)')
-    # plt.ylabel('$y$ (# lattice nodes)')
-    # plt.title(f'Air \n $f_l$, left wall at $T={TH}K$, $t={np.round(t/Nt*Time, decimals=2)}s$')
-    # plt.colorbar()
-    # plt.savefig(path_name + f"heatmap_fl_t={np.round(t/Nt*Time, decimals=2)}_N{Nx}_test1.png")
-
     return vel
 
 
@@ -422,25 +422,3 @@ u = solve()
 stop = time.time()
 print(stop-start)
 
-# # Compare results with literature
-# y_ref, u_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(0, 2))
-# x_ref, v_ref = np.loadtxt('data/ghia1982.dat', unpack=True, skiprows=2, usecols=(6, 8))
-#
-# fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=200)
-# axes.plot(u[Ny // 2, :, 0] / umax, np.linspace(0, 1.0, Ny), 'b-', label='LBM')
-# axes.plot(u_ref, y_ref, 'rs', label='Ghia et al. 1982')
-# axes.legend()
-# axes.set_xlabel(r'$u_x$')
-# axes.set_ylabel(r'$y$')
-# plt.tight_layout()
-# plt.savefig(path_name + "ux" + suffix)
-#
-# plt.clf()
-# fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=200)
-# axes.plot(np.linspace(0, 1.0, Nx), u[:, Nx // 2, 1] / umax, 'b-', label='LBM')
-# axes.plot(x_ref, v_ref, 'rs', label='Ghia et al. 1982')
-# axes.legend()
-# axes.set_xlabel(r'$u_x$')
-# axes.set_ylabel(r'$y$')
-# plt.tight_layout()
-# plt.savefig(path_name + "uy" + suffix)

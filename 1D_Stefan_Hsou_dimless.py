@@ -286,7 +286,7 @@ for t in range(Nt):
     if t % 10000 == 0:
         print(t)
 
-    if (t % 1000 == 0) and (t > 0):
+    if (t % 1 == 0):# and (t > 0):
         temp = t * Time / Nt
         t_phys.append(temp)
 
@@ -358,6 +358,7 @@ plt.savefig(png_path + "T" + png_file)
 np.savetxt(csv_path+"x_th"+csv_file,    X_th,   delimiter=",")
 np.savetxt(csv_path+"x_sim"+csv_file,   X_sim,  delimiter=",")
 np.savetxt(csv_path+"T"+csv_file,       T,      delimiter=",")
+np.savetxt(csv_path+"tp"+csv_file,       t_phys,      delimiter=",")
 
 stop = time.time()
 print(stop-start)

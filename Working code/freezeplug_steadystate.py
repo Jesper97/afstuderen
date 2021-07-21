@@ -24,8 +24,8 @@ def easy_view(nr, arr):
 
 
 # Domain parameters
-Time_b4 = 0
-Time = 10000
+Time_b4 = 10000
+Time = 20000
 W_wall = 0.05
 L_cooled = 0.2
 W = 0.1 + 2 * W_wall
@@ -183,6 +183,7 @@ print("Pr =", Pr)
 print("Ra =", Ra)
 print("Ste =", Ste)
 print("dx =", dx, "dt =", dt)
+print("phi =", phi)
 print("Nodes:", Nx, "x", Ny)
 print(f"{Nt} steps")
 if alpha_salt > 1/6:
@@ -220,76 +221,76 @@ def initialize(g):
     # fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
     # # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
 
-    # ### From csv
-    # path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/freezing/N300/"
-    # path2 = "_freeze_plug_40deg_tau=0.5143_N=300x150_t=25000.0.csv"
-    #
-    # rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
-    #
-    # vel = zeros((Nx, Ny, 2))
-    # # ux = np.genfromtxt(path1+"ux"+path2, delimiter=',')
-    # # uy = np.genfromtxt(path1+"uy"+path2, delimiter=',')
-    # # vel[:, :, 0] = ux.T / Cu
-    # # vel[:, :, 1] = np.rot90(np.rot90(np.rot90(uy))) / Cu
-    #
-    # fL = np.genfromtxt(path1+"fL"+path2, delimiter=',')
-    # fL = fL.T
-    #
-    # T = zeros((Nx+2, Ny+2))
-    # F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
-    # T_p = np.genfromtxt(path1+"T"+path2, delimiter=',')
-    # T = beta_salt_p * (T_p.T - T0_p)
-    #
-    # f_new = f_eq(rho, vel)
-    # Si = zeros((Nx, Ny, q))
+    ### From csv
+    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/60deg/w=5/freezing/"
+    path2 = "_freeze_plug_60deg_tau=0.5143_N=300x200_t=10000.0.csv"
 
-    #####
-    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/60deg/w=2.5/freezing/"
-    path2 = "_freeze_plug_60deg_tau=0.5143_N=300x150_t=30000.0.csv"
-    Nwall = 25
-    rho_new = np.genfromtxt(path1+"rho"+path2, delimiter=',')
-    rho_pipe1 = np.zeros((Nx, Nwall))
-    rho_pipe2 = np.zeros((Nx, Nwall))
-
-    fL_new = np.genfromtxt(path1+"fL"+path2, delimiter=',')
-    fL_new = fL_new.T
-    fL_pipe1 = np.zeros((Nx, Nwall))
-    fL_pipe2 = np.zeros((Nx, Nwall))
+    rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
 
     vel = zeros((Nx, Ny, 2))
     ux = np.genfromtxt(path1+"ux"+path2, delimiter=',')
     uy = np.genfromtxt(path1+"uy"+path2, delimiter=',')
-    vel_pipe1 = np.zeros((Nx, Nwall))
-    vel_pipe2 = np.zeros((Nx, Nwall))
-    vel_new = ux.T / Cu
-    vel_new2 = np.rot90(np.rot90(np.rot90(uy))) / Cu
+    vel[:, :, 0] = ux.T / Cu
+    vel[:, :, 1] = np.rot90(np.rot90(np.rot90(uy))) / Cu
 
+    fL = np.genfromtxt(path1+"fL"+path2, delimiter=',')
+    fL = fL.T
+
+    T = zeros((Nx+2, Ny+2))
+    F = - T[1:-1, 1:-1, None] * rho[:, :, None] * g
     T_p = np.genfromtxt(path1+"T"+path2, delimiter=',')
-    T_new = beta_salt_p * (T_p.T - T0_p)
-    T_pipe1 = np.zeros((Nx+2, Nwall+1))
-    T_pipe1[:, -1] = T_new[:, 0]
-    T_pipe2 = np.zeros((Nx+2, Nwall+1))
-    T_pipe2[:, 0] = T_new[:, -1]
-
-    for j in range(rho_pipe1.shape[1]):
-        rho_pipe1[:, j] = rho_new[:, 0]
-        rho_pipe2[:, -(j+1)] = rho_new[:, -1]
-        fL_pipe1[:, j] = fL_new[:, 0]
-        fL_pipe2[:, -(j+1)] = fL_new[:, -1]
-        T_pipe1[:, j] = T_new[:, 0]
-        T_pipe2[:, -(j+1)] = T_new[:, -1]
-
-    rho = np.concatenate((rho_pipe1, rho_new, rho_pipe2), axis=1)
-    fL = np.concatenate((fL_pipe1, fL_new, fL_pipe2), axis=1)
-    vel[:, :, 0] = np.concatenate((vel_pipe1, vel_new, vel_pipe2), axis=1)
-    vel[:, :, 1] = np.concatenate((vel_pipe1, vel_new2, vel_pipe2), axis=1)
-    T = np.concatenate((T_pipe1, T_new[:, 1:-1], T_pipe2), axis=1)
+    T = beta_salt_p * (T_p.T - T0_p)
 
     f_new = f_eq(rho, vel)
     Si = zeros((Nx, Ny, q))
-    F = zeros((Nx, Ny, q))
 
+    #####
+    # path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/60deg/w=2.5/freezing/"
+    # path2 = "_freeze_plug_60deg_tau=0.5143_N=300x150_t=30000.0.csv"
+    # Nwall = 25
+    # rho_new = np.genfromtxt(path1+"rho"+path2, delimiter=',')
+    # rho_pipe1 = np.zeros((Nx, Nwall))
+    # rho_pipe2 = np.zeros((Nx, Nwall))
+    #
+    # fL_new = np.genfromtxt(path1+"fL"+path2, delimiter=',')
+    # fL_new = fL_new.T
+    # fL_pipe1 = np.zeros((Nx, Nwall))
+    # fL_pipe2 = np.zeros((Nx, Nwall))
+    #
     # vel = zeros((Nx, Ny, 2))
+    # ux = np.genfromtxt(path1+"ux"+path2, delimiter=',')
+    # uy = np.genfromtxt(path1+"uy"+path2, delimiter=',')
+    # vel_pipe1 = np.zeros((Nx, Nwall))
+    # vel_pipe2 = np.zeros((Nx, Nwall))
+    # vel_new = ux.T / Cu
+    # vel_new2 = np.rot90(np.rot90(np.rot90(uy))) / Cu
+    #
+    # T_p = np.genfromtxt(path1+"T"+path2, delimiter=',')
+    # T_new = beta_salt_p * (T_p.T - T0_p)
+    # T_pipe1 = np.zeros((Nx+2, Nwall+1))
+    # T_pipe1[:, -1] = T_new[:, 0]
+    # T_pipe2 = np.zeros((Nx+2, Nwall+1))
+    # T_pipe2[:, 0] = T_new[:, -1]
+    #
+    # for j in range(rho_pipe1.shape[1]):
+    #     rho_pipe1[:, j] = rho_new[:, 0]
+    #     rho_pipe2[:, -(j+1)] = rho_new[:, -1]
+    #     fL_pipe1[:, j] = fL_new[:, 0]
+    #     fL_pipe2[:, -(j+1)] = fL_new[:, -1]
+    #     T_pipe1[:, j] = T_new[:, 0]
+    #     T_pipe2[:, -(j+1)] = T_new[:, -1]
+    #
+    # rho = np.concatenate((rho_pipe1, rho_new, rho_pipe2), axis=1)
+    # fL = np.concatenate((fL_pipe1, fL_new, fL_pipe2), axis=1)
+    # vel[:, :, 0] = np.concatenate((vel_pipe1, vel_new, vel_pipe2), axis=1)
+    # vel[:, :, 1] = np.concatenate((vel_pipe1, vel_new2, vel_pipe2), axis=1)
+    # T = np.concatenate((T_pipe1, T_new[:, 1:-1], T_pipe2), axis=1)
+    #
+    # f_new = f_eq(rho, vel)
+    # Si = zeros((Nx, Ny, q))
+    # F = zeros((Nx, Ny, q))
+    #
+    # # vel = zeros((Nx, Ny, 2))
 
     return vel, rho, f_new, Si, F, T, fL
 
@@ -567,8 +568,8 @@ def solve(B, cp, alpha, g_vec_init):
         #         print("T convergence", np.max(npabs(T - T_old)))
         #         print("fL convergence", np.max(npabs(fL - fL_old)))
 
-            T_old = T.copy()
-            fL_old = fL.copy()
+            # T_old = T.copy()
+            # fL_old = fL.copy()
 
 
 start = time.time()

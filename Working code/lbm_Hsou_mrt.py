@@ -15,7 +15,7 @@ pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
 
 # # Domain parameters
-Time = 11565
+Time = 2313
 L = 0.1
 H = L
 g_phys = 9.81
@@ -62,7 +62,8 @@ DT = 10
 T0_phys = 301.05
 TH_phys = T0_phys + DT
 TC_phys = T0_phys
-epsilon = 0.005 * DT
+epsilon = 0.05 * DT
+delta = 1e-5
 
 # LBM parameters
 q = 9
@@ -84,7 +85,7 @@ FoSte_t = Ste * alpha_phys / L**2
 l_relax = 1#0.1
 tau = 0.55
 tau_inv = 1/tau
-Nx = 240
+Nx = 100
 Ny = Nx #np.int(0.714*Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -102,7 +103,7 @@ Ccp = Ch * beta_phys
 Clbda = Crho * dx**4 / dt**3 * beta_phys
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/10 - 5)
+Nresponse = np.int(Nt/1 - 5)
 
 # Initial conditions
 dim = (Nx, Ny)
@@ -157,10 +158,10 @@ if alpha > 1/6:
     print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/{material}/Ra108/N240/"
-suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Hsou/{material}/Ra108/N240/"
-csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_Pr{np.round(Pr, 3)}_Ste{np.round(Ste, 3)}_tau{tau}_N={Nx}x{Ny}"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/octadecane/DT/5/"
+suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_DT{epsilon}_epsilon{delta}_tau{tau}_N={Nx}x{Ny}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Hsou/octadecane/DT/5/"
+csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_DT{epsilon}_epsilon{delta}_tau{tau}_N={Nx}x{Ny}"
 print(suffix)
 
 
@@ -281,7 +282,7 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
 
                     f_l_new[i-1, j-1] = min(max(f_l_new[i-1, j-1], 0), 1)
 
-                    if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-6 and (n_iter >= 3):
+                    if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < delta and (n_iter >= 3):
                         break
                     elif (n_iter > 1000) and (l_relax == 1):
                         print('yes')
@@ -292,7 +293,7 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
 
                     n_iter += 1
 
-                if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < 1e-5:
+                if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < delta:
                     break
                 else:
                     continue

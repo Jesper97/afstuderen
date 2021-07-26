@@ -15,7 +15,7 @@ pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
 
 # # Domain parameters
-Time = 2313
+Time = 11565
 L = 0.1
 H = L
 g_phys = 9.81
@@ -62,7 +62,7 @@ DT = 10
 T0_phys = 301.05
 TH_phys = T0_phys + DT
 TC_phys = T0_phys
-epsilon = 0.05 * DT
+epsilon = 0.01 * DT
 delta = 1e-5
 
 # LBM parameters
@@ -83,7 +83,7 @@ FoSte_t = Ste * alpha_phys / L**2
 
 # Simulation parameters
 l_relax = 1#0.1
-tau = 0.55
+tau = 0.525
 tau_inv = 1/tau
 Nx = 100
 Ny = Nx #np.int(0.714*Nx)
@@ -151,6 +151,7 @@ print("Simulating", material)
 print("Pr =", Pr)
 print("Ra =", Ra)
 print("Ste =", Ste)
+print("alpha =", alpha)
 print("dx =", dx, "dt =", dt)
 print("Nodes:", Nx, "x", Ny)
 print(f"{Nt} steps")
@@ -158,10 +159,10 @@ if alpha > 1/6:
     print(f"Warning alpha = {np.round(alpha, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/octadecane/DT/5/"
-suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_DT{epsilon}_epsilon{delta}_tau{tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Hsou/octadecane/DT/5/"
-csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_DT{epsilon}_epsilon{delta}_tau{tau}_N={Nx}x{Ny}"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/octadecane/Ra108/N100/tau0.525/"
+suffix = f"Ra{np.format_float_scientific(Ra, precision=3)}_tau{tau}_N={Nx}x{Ny}_t{Time}.png"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/Hsou/octadecane/Ra108/N100/tau0.525/"
+csv_file = f"Ra{np.format_float_scientific(Ra, precision=3)}_tau{tau}_N={Nx}x{Ny}_t{Time}"
 print(suffix)
 
 
@@ -260,6 +261,8 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
 
     f_l_iter = f_l_old.copy()
 
+    N_iter = np.zeros((Nx, Ny))
+
     for j in prange(1, Ny+1):
         for i in prange(1, Nx+1):
             constant_terms = T_old[i, j] - ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
@@ -294,6 +297,7 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
                     n_iter += 1
 
                 if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < delta:
+                    N_iter[i, j] = n_iter
                     break
                 else:
                     continue
@@ -305,7 +309,7 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
     T_new[0, :] = 16/5 * TH - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
     # T_new[-1, :] = 16/5 * TC - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-    return T_new, f_l_new
+    return T_new, f_l_new, np.max(N_iter)
 
 
 @njit(parallel=True)
@@ -469,9 +473,11 @@ def solve(fL, B):
     vel, rho, f_str, Si, F, T = initialize(g_vec)
     Nu = np.array([0], dtype=np.float32)
     FoSte = np.array([0], dtype=np.float32)
+    N_tot = 0
 
     for t in range(Nt):
-        T, fL = temperature(T, fL, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
+        T, fL, N_iter = temperature(T, fL, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
+        N_tot += N_iter
         Si, F = forcing(vel, g_vec, T)
         rho, vel = moment_update(f_str, F, B)
         B, f_col = collision(rho, vel, f_str, Si, fL)
@@ -496,20 +502,22 @@ def solve(fL, B):
         if (t % Nresponse == 0) and (t != 0):
             outputs(f_str, T, fL, B, t)
 
-    return Nu, FoSte
+    return Nu, FoSte, N_tot
 
 
 start = time.time()
 
-Nu, FoSte = solve(fL, B)
+Nu, FoSte, N_tot = solve(fL, B)
 
 stop = time.time()
 run_time = np.array([stop - start])
 print(run_time[0])
+average_iter = np.array([N_tot / Nt])
 
 np.savetxt(csv_path+"Nu"+csv_file+f".csv",      Nu,       delimiter=",")
 np.savetxt(csv_path+"FoSte"+csv_file+f".csv",   FoSte,    delimiter=",")
 np.savetxt(csv_path+"run_time"+csv_file+".csv", run_time, delimiter=",")
+np.savetxt(csv_path+"average_iterations"+csv_file+".csv",    average_iter,   delimiter=",")
 
 FoSte = np.array(FoSte[1:])
 # Nu_corr = (2 * FoSte)**(-1/2) + (0.35 * Ra**(1/4) - (2 * FoSte)**(-1/2)) * (1 + (0.0175 * Ra**(3/4) * FoSte**(3/2))**(-2))**(-1/2)  # High Pr

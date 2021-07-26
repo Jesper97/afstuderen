@@ -24,8 +24,8 @@ def easy_view(nr, arr):
 
 
 # Domain parameters
-Time_b4 = 10000
-Time = 20000
+Time_b4 = 12000
+Time = 18000
 W_wall = 0.05
 L_cooled = 0.2
 W = 0.1 + 2 * W_wall
@@ -34,7 +34,7 @@ g_phys = 9.81
 g_vec_phys = np.array([0, -g_phys])
 
 # Rotation of the domain
-phi = 60        # Degrees
+phi = 90        # Degrees
 phi_ccw = 2 * np.pi * (1 - phi/360)
 rotation_mat = np.array([[np.cos(phi_ccw), -np.sin(phi_ccw)], [np.sin(phi_ccw), np.cos(phi_ccw)]])
 g_vec_p_rot = np.dot(rotation_mat, g_vec_phys)
@@ -127,7 +127,7 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/20 - 5)
+Nresponse = np.int(Nt/5 - 5)
 
 # Initial conditions
 cp_sol = cp_salt_sol_p / Ccp
@@ -192,15 +192,15 @@ if alpha_HN > 1/6:
     print(f"Warning alpha = {np.round(alpha_HN, 2)}. Can cause stability or convergence issues.")
 
 # CSV filenames
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_3/60deg/w=5/freezing/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_3/90deg/w=5/freezing/"
 suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/60deg/w=5/freezing/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/90deg/w=5/freezing/"
 csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}"
 print(suffix)
 
 
 def initialize(g):
-    ##### From start
+    #### From start
     # rho = rho0 * ones((Nx, Ny))
     # vel = zeros((Nx, Ny, 2))
     #
@@ -219,11 +219,10 @@ def initialize(g):
     #
     # fL = np.zeros(dim)
     # fL[idx_cooled:, idx_boundary:Ny-idx_boundary] = 1
-    # # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
 
-    ### From csv
-    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/60deg/w=5/freezing/"
-    path2 = "_freeze_plug_60deg_tau=0.5143_N=300x200_t=10000.0.csv"
+    ##### From csv
+    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/90deg/w=5/freezing/"
+    path2 = "_freeze_plug_90deg_tau=0.5143_N=300x200_t=12000.0.csv"
 
     rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
 
@@ -245,8 +244,8 @@ def initialize(g):
     Si = zeros((Nx, Ny, q))
 
     #####
-    # path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/60deg/w=2.5/freezing/"
-    # path2 = "_freeze_plug_60deg_tau=0.5143_N=300x150_t=30000.0.csv"
+    # path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/90deg/w=2.5/freezing/"
+    # path2 = "_freeze_plug_90deg_tau=0.5143_N=300x150_t=30000.0.csv"
     # Nwall = 25
     # rho_new = np.genfromtxt(path1+"rho"+path2, delimiter=',')
     # rho_pipe1 = np.zeros((Nx, Nwall))
@@ -289,8 +288,6 @@ def initialize(g):
     # f_new = f_eq(rho, vel)
     # Si = zeros((Nx, Ny, q))
     # F = zeros((Nx, Ny, q))
-    #
-    # # vel = zeros((Nx, Ny, 2))
 
     return vel, rho, f_new, Si, F, T, fL
 

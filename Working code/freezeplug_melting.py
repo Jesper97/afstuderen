@@ -80,7 +80,7 @@ cs = 1/np.sqrt(3)
 T0_p = 846
 Tsub_p = 5
 #######
-TH_p = 1003
+TH_p = 963
 TC_p = Tm_salt_p - Tsub_p
 epsilon = 0.01 * (TH_p - TC_p)
 
@@ -95,7 +95,7 @@ l_relax = 1
 tau = 0.5143
 tau_inv = 1/tau
 #######
-Nx = 375
+Nx = 300
 Ny = np.int(W / L * Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
@@ -130,7 +130,7 @@ Clbda = Crho * dx**4 / dt**3 * beta_salt_p
 Calpha = alpha_salt_liq_p / alpha_salt
 
 Nt = np.int(Time/dt)
-Nresponse = np.int(Nt/10 - 5)
+Nresponse = np.int(Nt/5 - 5)
 
 # Initial conditions
 cp_sol = cp_salt_sol_p / Ccp
@@ -196,9 +196,9 @@ if alpha_HN > 1/6:
 
 # CSV filenames
 ######
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_3/30deg/w=2.5/melting/DT160/N375/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_3/30deg/w=2.5/melting/DT120/"
 suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_melting.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/melting/DT160/N375/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/melting/DT120/"
 csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_melting"
 print(suffix)
 
@@ -226,8 +226,8 @@ def initialize(g):
     # # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
 
     ### From csv
-    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/freezing/N375/"
-    path2 = "_freeze_plug_40deg_tau=0.5143_N=375x187_t=30000.0.csv"
+    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/freezing/N300/"
+    path2 = "_freeze_plug_40deg_tau=0.5143_N=300x150_t=30000.0.csv"
 
     rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
 
@@ -579,20 +579,6 @@ def solve(B, cp, alpha):
         if (t % Nresponse == 0):# and (t != 0):
             outputs(f_str, T, fL, B, t)
 
-        # if (t % Nt/2000 == 0) and (t > 10000):
-        #     print("T diff", np.max(npabs(T - T_old)))
-        #     print("fL diff", np.max(npabs(fL - fL_old)))
-        #
-        #     if (npabs(T - T_old) < 1e-6).all():
-        #         if (npabs(fL - fL_old) < 1e-6).all():
-        #             outputs(f_str, T, fL, B, t)
-        #             sys.exit("Convergence reached")
-        #     if t % 50000 == 0:
-        #         print("T convergence", np.max(npabs(T - T_old)))
-        #         print("fL convergence", np.max(npabs(fL - fL_old)))
-        #
-        #     T_old = T.copy()
-        #     fL_old = fL.copy()
 
 
 start = time.time()

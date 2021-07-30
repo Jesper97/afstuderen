@@ -195,12 +195,11 @@ ax2.set_xlabel(r'$\bar{x}$', fontsize=13)
 ax2.set_ylabel(r'$\bar{y}$', fontsize=13)
 ax2.set_title(f'H-linear', fontsize=16)
 
-fig.subplots_adjust(bottom=0.1, top=0.9, left=0.1, right=0.8,
-                    wspace=0.3, hspace=0.15)
-cb_ax = fig.add_axes([0.85, 0.1, 0.02, 0.8])
-cbar = fig.colorbar(im, cax=cb_ax)
+# fig.subplots_adjust(wspace=0.3, hspace=0.0)
+# cb_ax = fig.add_axes([0.85, 0.1, 0.02, 0.8])
+# cbar = fig.colorbar(im, cax=cb_ax)
 
-# fig.tight_layout()
+fig.tight_layout()
 fig.savefig("/Users/Jesper/Documents/MEP/Code/Working code/Figures/Hsou/" + f"contour_u_oct.png", dpi=300)
 fig.clf()
 

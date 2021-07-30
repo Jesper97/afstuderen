@@ -35,7 +35,7 @@ g_phys = 9.81
 g_vec_phys = np.array([0, -g_phys])
 
 # Rotation of the domain
-phi = 40        # Degrees
+phi = 90        # Degrees
 phi_ccw = 2 * np.pi * (1 - phi / 360)
 rotation_mat = np.array([[np.cos(phi_ccw), -np.sin(phi_ccw)], [np.sin(phi_ccw), np.cos(phi_ccw)]])
 g_vec_p_rot = np.dot(rotation_mat, g_vec_phys)
@@ -80,7 +80,7 @@ cs = 1/np.sqrt(3)
 T0_p = 846
 Tsub_p = 5
 #######
-TH_p = 963
+TH_p = 1003
 TC_p = Tm_salt_p - Tsub_p
 epsilon = 0.01 * (TH_p - TC_p)
 
@@ -196,9 +196,9 @@ if alpha_HN > 1/6:
 
 # CSV filenames
 ######
-path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_3/30deg/w=2.5/melting/DT120/"
+path_name = f"/Users/Jesper/Documents/MEP/Code/Working code/Figures/freeze_plug_3/90deg/w=2.5/melting/DT160/"
 suffix = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_melting.png"
-csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/melting/DT120/"
+csv_path = f"/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/90deg/w=2.5/melting/DT160/"
 csv_file = f"freeze_plug_{phi}deg_tau={tau}_N={Nx}x{Ny}_melting"
 print(suffix)
 
@@ -226,8 +226,8 @@ def initialize(g):
     # # fL[:idx_cooled, idx_boundary:Ny-idx_boundary] = 1
 
     ### From csv
-    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=2.5/freezing/N300/"
-    path2 = "_freeze_plug_40deg_tau=0.5143_N=300x150_t=30000.0.csv"
+    path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/90deg/w=2.5/freezing/"
+    path2 = "_freeze_plug_90deg_tau=0.5143_N=300x150_t=30000.0.csv"
 
     rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
 

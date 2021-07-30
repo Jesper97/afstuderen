@@ -24,7 +24,7 @@ def easy_view(nr, arr):
 
 
 # Domain parameters
-Time_b4 = 30000
+Time_b4 = 40000
 Time = 10000
 W_wall = 0.05
 L_cooled = 0.2
@@ -223,7 +223,7 @@ def initialize(g):
 
     #### From csv
     path1 = "/Users/Jesper/Documents/MEP/Code/Working code/sim_data/freeze_plug_3/30deg/w=5/freezing/"
-    path2 = "_freeze_plug_40deg_tau=0.5143_N=300x200_t=30000.0.csv"
+    path2 = "_freeze_plug_40deg_tau=0.5143_N=300x200_t=40000.0.csv"
 
     rho = np.genfromtxt(path1+"rho"+path2, delimiter=',')
 

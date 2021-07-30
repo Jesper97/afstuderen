@@ -7,7 +7,6 @@ import time
 from matplotlib import cm
 from numba import njit, prange
 from numpy import zeros, empty, ones, einsum, any
-from numpy import abs as npabs
 from numpy import sum as npsum
 
 np.set_printoptions(threshold=sys.maxsize)
@@ -15,55 +14,53 @@ pd.set_option("display.max_rows", None, "display.max_columns", None)
 pd.set_option('display.expand_frame_repr', False)
 
 # # Domain parameters
-Time = 11565
-L = 0.1
-H = L
-g_phys = 9.81
-g_vec_phys = np.array([0, -g_phys])
+# Time = 11565          # Total time
+# L = 0.1               # Length (x-direction)
+# H = L                 # Height (y-direction)
+# g_phys = 9.81         # Gravitational acceleration
+# g_vec_phys = np.array([0, -g_phys])   # Gravitational acceleration vector (m/s^2)
 
-# # Physical parameters gallium
-# Time = 1140         # (s)
-# L = 0.1             # Length of cavity (m)
-# H = 0.714*L      # Height of cavity (m)
-# g_phys = 9.81            # Gravitational acceleration (m/s^2)
-# rho_phys = 6.093e3      # Density (kg/m^3)
-# lbda_phys = 33           # Thermal conductivity (W/m K)
-# mu_phys = 1.81e-3        # Dynamic viscosity (Ns/m^2)
-# nu_phys = mu_phys / rho_phys      # Kinematic viscosity (m^2/s)
-# beta_phys = 1.2e-4       # Thermal expansion (1/K)
-# Lat_phys = 8.016e5       # Latent heat (J/kg)
-# cp_phys = 381           # Specific heat (J/(kgK))
-# alpha_phys = lbda_phys / (rho_phys * cp_phys)     # Thermal diffusivity (m^2/s)
-# Tm_phys = 302.8          # Melting point (K)
-# g_vec_phys = g_phys * np.array([0, -1])
-# print(alpha_phys)
-# print(nu_phys)
+# Physical parameters gallium
+delta = 1e-5                # Convergence criterium
+Time = 1140                 # (s)
+L = 0.1                     # Length of cavity (m)
+H = 0.714*L                 # Height of cavity (m)
+g_phys = 9.81               # Gravitational acceleration (m/s^2)
+rho_phys = 6.093e3          # Density (kg/m^3)
+lbda_phys = 33              # Thermal conductivity (W/m K)
+mu_phys = 1.81e-3           # Dynamic viscosity (Ns/m^2)
+nu_phys = mu_phys / rho_phys      # Kinematic viscosity (m^2/s)
+beta_phys = 1.2e-4          # Thermal expansion (1/K)
+Lat_phys = 8.016e5          # Latent heat (J/kg)
+cp_phys = 381               # Specific heat (J/(kgK))
+alpha_phys = lbda_phys / (rho_phys * cp_phys)   # Thermal diffusivity (m^2/s)
+Tm_phys = 302.8             # Melting point (K)
+g_vec_phys = g_phys * np.array([0, -1])         # Gravitational acceleration vector (m/s^2)
 
-# # Temperature gallium
-# DT = 10
-# T0_phys = 301.3
-# TH_phys = 311  #T0_phys + DT
-# TC_phys = 301.3  #T0_phys
-# epsilon = 0.005 * DT
-
-# Material parameters octadecane
-rho_phys = 775.5
-cp_phys = 2200
-lbda_phys = 0.157 / 1.06421589
-mu_phys = 3.26e-3
-nu_phys = 5.005e-6 / 1.157627
-alpha_phys = lbda_phys / (cp_phys * rho_phys)   # 8.647e-8
-beta_phys = 9.1e-4 / 2.38786375
-Lat_phys = 241e3 / 1.09545463
-Tm_phys = 301.13
-
-# Temperature octadecane
+# Temperature gallium
 DT = 10
-T0_phys = 301.05
-TH_phys = T0_phys + DT
-TC_phys = T0_phys
-epsilon = 0.01 * DT
-delta = 1e-5
+T0_phys = 301.3         # Initial temp
+TH_phys = 311           # Hot wall temp
+TC_phys = 301.3         # Cold wall temp
+epsilon = 0.005 * DT    # Width of mushy zone
+
+# # Material parameters octadecane
+# rho_phys = 775.5
+# cp_phys = 2200
+# lbda_phys = 0.157 / 1.06421589
+# mu_phys = 3.26e-3
+# nu_phys = 5.005e-6 / 1.157627
+# alpha_phys = lbda_phys / (cp_phys * rho_phys)   # 8.647e-8
+# beta_phys = 9.1e-4 / 2.38786375
+# Lat_phys = 241e3 / 1.09545463
+# Tm_phys = 301.13
+
+# # Temperature octadecane
+# DT = 10
+# T0_phys = 301.05
+# TH_phys = T0_phys + DT
+# TC_phys = T0_phys
+# epsilon = 0.01 * DT
 
 # LBM parameters
 q = 9
@@ -82,17 +79,19 @@ Ste = cp_phys * DT / Lat_phys
 FoSte_t = Ste * alpha_phys / L**2
 
 # Simulation parameters
-l_relax = 1#0.1
-tau = 0.525
+l_relax = 1
+tau = 0.504
 tau_inv = 1/tau
-Nx = 100
-Ny = Nx #np.int(0.714*Nx)
+Nx = 140
+# Ny = Nx
+Ny = np.int(0.714*Nx)
 rho0 = 1
 nu = cs**2 * (tau - 1/2)
 
-# Calculate dependent parameters
+# Dependent parameters
 alpha = nu / Pr
 
+# Conversion parameters
 dx = L / Nx
 dt = cs**2 * (tau - 1/2) * dx**2 / nu_phys
 Cu = dx / dt
@@ -120,6 +119,7 @@ g_vec = g_vec_phys / Cg
 TH = beta_phys * (TH_phys - T0_phys)
 TC = beta_phys * (TC_phys - T0_phys)
 
+# MRT parameters
 s0 = 0
 s1 = 1.64
 s2 = 1.2
@@ -144,7 +144,7 @@ M8 = np.array([0, 0, 0, 0, 0, 1, -1, 1, -1])
 M = np.array([M0, M1, M2, M3, M4, M5, M6, M7, M8])
 M_inv = np.linalg.inv(M)
 
-MSM = np.dot(M_inv, np.dot(S, M))
+MSM = np.dot(M_inv, np.dot(S, M))       # Total MRT matrix for collision step
 
 material = "octadecane"
 print("Simulating", material)
@@ -189,7 +189,7 @@ def initialize(g):
 
 
 @njit
-def streaming(f_old):
+def streaming(f_old):           # Streaming step for all different parts of the domain
     f_new = empty((Nx, Ny, 9))
     f = str.fluid(Nx, Ny, e, f_new, f_old)
     f = str.left_right_wall(Nx, Ny, f, f_old)
@@ -201,7 +201,7 @@ def streaming(f_old):
 
 
 @njit(parallel=True)
-def f_eq(rho, vel):
+def f_eq(rho, vel):             # Calculation of equilibrium distributions
     feq = empty((Nx, Ny, q))
     for j in prange(Ny):
         for i in prange(Nx):
@@ -214,10 +214,8 @@ def f_eq(rho, vel):
 
 
 @njit
-def collision_speedup(Omegaf, fL, f, Si):
+def collision_speedup(Omegaf, fL, f, Si):   # Calculation of part of collision, since einsum not supported by numba
     Bi = zeros((Nx, Ny, 9))
-    #####
-    # B = np.rint((1 - fL) * (tau - 1/2) / (fL + tau - 1/2))
     B = (1 - fL) * (tau - 1/2) / (fL + tau - 1/2)
     for k in range(9):
         Bi[:, :, k] = B
@@ -225,7 +223,7 @@ def collision_speedup(Omegaf, fL, f, Si):
     return B, f - (1 - Bi) * Omegaf + Bi * (f[:, :, opp] - f) + Si * (1 - Bi)
 
 
-def collision(r, u, f_old, Si, fL):
+def collision(r, u, f_old, Si, fL):         # Collision step
     Omegaf = einsum('ij,klj->kli', MSM, f_old - f_eq(r, u) - Si/2)
     return collision_speedup(Omegaf, fL, f_old, Si)
 
@@ -235,12 +233,12 @@ def forcing(vel, g, T):
     Si = empty((Nx, Ny, q))
     F = empty((Nx, Ny, q))
     for j in prange(Ny):
-        for i in prange(Nx):
+        for i in prange(Nx):        # Calculation of forces
             ip = i + 1
             jp = j + 1
             F[i, j, 0] = - T[ip, jp] * g[0] * rho0
             F[i, j, 1] = - T[ip, jp] * g[1] * rho0
-            for k in prange(q):
+            for k in prange(q):     # Calculation of source term
                 eF = F[i, j, 0]*e[k, 0]+F[i, j, 1]*e[k, 1]
                 Si[i, j, k] = w[k] * (3 * eF + 9 * (vel[i, j, 0]*e[k, 0]+vel[i, j, 1]*e[k, 1]) * eF -
                                       3 * (vel[i, j, 0]*F[i, j, 0]+vel[i, j, 1]*F[i, j, 1]))
@@ -254,6 +252,7 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
     f_l_new = np.zeros((Nx, Ny))
     l_relax = 1
 
+    # Pre-calculation of constant terms for efficiency
     Ts = ((Tm_phys - epsilon) - T0_phys) * beta_phys
     Tl = ((Tm_phys + epsilon) - T0_phys) * beta_phys
     h_s = cp * Ts
@@ -261,15 +260,15 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
 
     f_l_iter = f_l_old.copy()
 
-    N_iter = np.zeros((Nx, Ny))
+    # N_iter = np.zeros((Nx, Ny))
 
     for j in prange(1, Ny+1):
-        for i in prange(1, Nx+1):
+        for i in prange(1, Nx+1):   # Pre-calculation of constant-in-iteration terms for efficiency
             constant_terms = T_old[i, j] - ux[i-1, j-1] * (T_old[i+1, j] - T_old[i-1, j] - 1/4 * (T_old[i+1, j+1] - T_old[i-1, j+1] + T_old[i+1, j-1] - T_old[i-1, j-1]))\
                              - uy[i-1, j-1] * (T_old[i, j+1] - T_old[i, j-1] - 1/4 * (T_old[i+1, j+1] - T_old[i+1, j-1] + T_old[i-1, j+1] - T_old[i-1, j-1]))\
                              + alpha * (2 * (T_old[i+1, j] + T_old[i-1, j] + T_old[i, j+1] + T_old[i, j-1]) - 1/2 * (T_old[i+1, j+1] + T_old[i-1, j+1] + T_old[i-1, j-1] + T_old[i+1, j-1]) - 6 * T_old[i, j])
 
-            while True:
+            while True:             # Double while-loop to facilitate underrelaxation after certain number of iters.
                 n_iter = 1
                 while True:
                     T_new[i, j] = constant_terms - Lat / cp * (f_l_iter[i-1, j-1] - f_l_old[i-1, j-1])
@@ -285,10 +284,11 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
 
                     f_l_new[i-1, j-1] = min(max(f_l_new[i-1, j-1], 0), 1)
 
+                    # Determine if convergence criterion is reached, underrelaxation is needed or new iteration needed
                     if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < delta and (n_iter >= 3):
                         break
                     elif (n_iter > 1000) and (l_relax == 1):
-                        print('yes')
+                        print('No convergence')
                         l_relax = 0.1
                         break
                     else:
@@ -297,23 +297,23 @@ def temperature(T_old, f_l_old, ux, uy, t, TC, TH):
                     n_iter += 1
 
                 if np.abs(f_l_new[i-1, j-1] - f_l_iter[i-1, j-1]) < delta:
-                    N_iter[i, j] = n_iter
+                    # N_iter[i, j] = n_iter
                     break
                 else:
                     continue
 
-    # Ghost nodes
+    # Extrapolate to ghost nodes
     T_new[1:-1, 0] = 21/23 * T_new[1:-1, 1] + 3/23 * T_new[1:-1, 2] - 1/23 * T_new[1:-1, 3]         # Neumann extrapolation on lower boundary
     T_new[1:-1, -1] = 21/23 * T_new[1:-1, -2] + 3/23 * T_new[1:-1, -3] - 1/23 * T_new[1:-1, -4]     # Neumann extrapolation on upper boundary
     T_new[-1, :] = 21/23 * T_new[-2, :] + 3/23 * T_new[-3, :] - 1/23 * T_new[-4, :]               # Neumann extrapolation on right boundary
     T_new[0, :] = 16/5 * TH - 3 * T_new[1, :] + T_new[2, :] - 1/5 * T_new[3, :]               # Dirichlet extrapolation on left boundary
     # T_new[-1, :] = 16/5 * TC - 3 * T_new[-2, :] + T_new[-3, :] - 1/5 * T_new[-4, :]           # Dirichlet extrapolation on right boundary
 
-    return T_new, f_l_new, np.max(N_iter)
+    return T_new, f_l_new
 
 
 @njit(parallel=True)
-def moment_update(f_new, F, B):
+def moment_update(f_new, F, B):     # Update macroscopic moments
     rho = empty((Nx, Ny))
     vel = empty((Nx, Ny, 2))
     for j in prange(Ny):
@@ -330,7 +330,7 @@ def moment_update(f_new, F, B):
 
 
 @njit#(parallel=True)
-def moment_plots(f_new, B):
+def moment_plots(f_new, B):         # Same as above, but no intermediate forcing
     rho = empty((Nx, Ny))
     vel = empty((Nx, Ny, 2))
     for j in prange(Ny):
@@ -346,7 +346,7 @@ def moment_plots(f_new, B):
     return rho, vel
 
 
-def outputs(f_str, T, fL, B, t):
+def outputs(f_str, T, fL, B, t):    # Generate figures and csv-files with outputs
     rho, vel = moment_plots(f_str, B)
     T_phys = T / beta_phys + T0_phys
     TH_phys = TH / beta_phys + T0_phys
@@ -462,9 +462,9 @@ def outputs(f_str, T, fL, B, t):
 
 
 @njit(fastmath=True)
-def nusselt(Nu, FoSte, T, t):
-    Nu_new = np.float32(-(1 / (beta_phys * DT)) * npsum(T[1, 1:-1] - T[0, 1:-1]))
-    # Nu_new = -(1 / (beta_phys * DT)) * npsum((-23 * T[0, 1:-1] + 21 * T[1, 1:-1] + 3 * T[2, 1:-1] - T[3, 1:-1]) / 24)
+def nusselt(Nu, FoSte, T, t):       # Calculation of Nusselt number
+    # Nu_new = np.float32(-(1 / (beta_phys * DT)) * npsum(T[1, 1:-1] - T[0, 1:-1]))
+    Nu_new = -(1 / (beta_phys * DT)) * npsum((-23 * T[0, 1:-1] + 21 * T[1, 1:-1] + 3 * T[2, 1:-1] - T[3, 1:-1]) / 24)
     FoSte_new = np.float32(FoSte_t * (t / Nt * Time))
     return np.append(Nu, Nu_new), np.append(FoSte, FoSte_new)
 
@@ -475,19 +475,17 @@ def solve(fL, B):
     FoSte = np.array([0], dtype=np.float32)
     N_tot = 0
 
-    for t in range(Nt):
-        T, fL, N_iter = temperature(T, fL, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
-        N_tot += N_iter
+    for t in range(Nt):             # Timestep loop that calls all functions
+        T, fL = temperature(T, fL, vel[:, :, 0], vel[:, :, 1], t, TC, TH)
         Si, F = forcing(vel, g_vec, T)
         rho, vel = moment_update(f_str, F, B)
         B, f_col = collision(rho, vel, f_str, Si, fL)
         f_str = streaming(f_col)
 
-        if t % 2500 == 0:
+        if t % 2500 == 0:           # Print time and approximate total runtime
             print(t)
             # print(np.max(vel[:, :, 1]))
             # print(np.max(fL))
-
             if t == 0:
                 begin = time.time()
             if t == 10000:
@@ -496,10 +494,10 @@ def solve(fL, B):
                 mins = np.round(runtime/60, 1)
                 print("Estimated runtime:", mins, "minutes.")
 
-        if (t > 5000) and (t % np.int(Nt / 1000) == 0):
+        if (t > 5000) and (t % np.int(Nt / 1000) == 0):     # Calculate Nusselt number
             Nu, FoSte = nusselt(Nu, FoSte, T, t)
 
-        if (t % Nresponse == 0) and (t != 0):
+        if (t % Nresponse == 0) and (t != 0):               # Generate outputs every Nresponse timesteps
             outputs(f_str, T, fL, B, t)
 
     return Nu, FoSte, N_tot
